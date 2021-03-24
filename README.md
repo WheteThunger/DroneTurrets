@@ -6,6 +6,9 @@
 
 ## Recommended compatible plugins
 
+- [Drone Lights](https://umod.org/plugins/drone-lights) -- Adds controllable search lights to RC drones.
+- [Drone Storage](https://umod.org/plugins/drone-storage) -- Allows players to deploy a small stash to RC drones.
+  - Note: A drone may only have a stash or a turret, not both at the same time.
 - [Better Turret Aim](https://umod.org/plugins/better-turret-aim) -- Allows mobile turrets to track targets more quickly.
 - [Turret Loadouts](https://umod.org/plugins/turret-loadouts) -- Automatically fills turrets with weapons and ammo when deployed.
 - [Turret Weapons](https://umod.org/plugins/turret-weapons) -- Allows turrets to accept more weapon types such as grenade launchers and rocket launchers.
