@@ -20,8 +20,6 @@
 
 ## Permissions
 
-### Deployment permissions
-
 - `droneturrets.deploy` -- Required to use the `droneturret` command.
 - `droneturrets.deploynpc` -- Required to use the `dronenpcturret` command.
 - `droneturrets.deploy.free` -- Allows using the `droneturret` command for free (no auto turret item required).
