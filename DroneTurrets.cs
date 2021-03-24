@@ -37,7 +37,7 @@ namespace Oxide.Plugins
         private const BaseEntity.Slot TurretSlot = BaseEntity.Slot.UpperModifier;
 
         private static readonly Vector3 TurretLocalPosition = new Vector3(0, -0.4f, 0);
-        private static readonly Vector3 SphereEntityInitialLocalPosition = new Vector3(0, 0.1f, 0);
+        private static readonly Vector3 SphereEntityLocalPosition = new Vector3(0, 0.1f, 0);
         private static readonly Vector3 TurretSwitchLocalPosition = new Vector3(0, -0.64f, -0.32f);
         private static readonly Quaternion TurretSwitchLocalRotation = Quaternion.Euler(0, 180, 0);
 
@@ -86,12 +86,10 @@ namespace Oxide.Plugins
             if (turret == null)
                 return null;
 
-            // Prevent drone pickup while the turret inventory is not empty.
-            if (turret.pickup.requireEmptyInv && !turret.inventory.IsEmpty())
-                return false;
-
-            // Prevent drone pickup while the turret is powered (unless it's an NPC turret which is always powered).
-            if (turret.IsOn() && !(turret is NPCAutoTurret))
+            // Prevent drone pickup while it has a turret.
+            // A player must remove the turret first.
+            // Ignores NPC turrets since they can't be picked up.
+            if (turret != null && !(turret is NPCAutoTurret))
                 return false;
 
             return null;
@@ -414,7 +412,7 @@ namespace Oxide.Plugins
 
         private static SphereEntity SpawnSphereEntity(Drone drone, float scale = TurretScale)
         {
-            SphereEntity sphereEntity = GameManager.server.CreateEntity(SpherePrefab, SphereEntityInitialLocalPosition) as SphereEntity;
+            SphereEntity sphereEntity = GameManager.server.CreateEntity(SpherePrefab, SphereEntityLocalPosition) as SphereEntity;
             if (sphereEntity == null)
                 return null;
 
