@@ -25,7 +25,7 @@
 - `droneturrets.deploy` -- Required to use the `droneturret` command.
 - `droneturrets.deploynpc` -- Required to use the `dronenpcturret` command.
 - `droneturrets.deploy.free` -- Allows using the `droneturret` command for free (no auto turret item required).
-- `droneturrets.autodeploy` -- Drones deployed by players with this permission will automatically have an auto turret, free of charge.
+- `droneturrets.autodeploy` -- Deploying a drone while you have this permission will automatically deploy an auto turret to it, free of charge.
   - Not recommended if you want to allow players to deploy other attachments such as stashes since they are incompatible.
 
 ## Configuration
