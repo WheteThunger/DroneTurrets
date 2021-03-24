@@ -3,7 +3,6 @@ using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -77,24 +76,6 @@ namespace Oxide.Plugins
             }
         }
 
-        private object CanPickupEntity(BasePlayer player, Drone drone)
-        {
-            if (!IsDroneEligible(drone))
-                return null;
-
-            var turret = GetDroneTurret(drone);
-            if (turret == null)
-                return null;
-
-            // Prevent drone pickup while it has a turret.
-            // A player must remove the turret first.
-            // Ignores NPC turrets since they can't be picked up.
-            if (turret != null && !(turret is NPCAutoTurret))
-                return false;
-
-            return null;
-        }
-
         private void OnEntityBuilt(Planner planner, GameObject go)
         {
             if (planner == null || go == null)
@@ -126,25 +107,25 @@ namespace Oxide.Plugins
             });
         }
 
-        private object OnSwitchToggled(ElectricSwitch electricSwitch)
+        private void OnSwitchToggled(ElectricSwitch electricSwitch)
         {
             var autoTurret = GetParentTurret(electricSwitch);
             if (autoTurret == null)
-                return null;
+                return;
 
             var drone = GetParentDrone(autoTurret);
             if (drone == null)
-                return null;
+                return;
 
             if (electricSwitch.IsOn())
                 autoTurret.InitiateStartup();
             else
                 autoTurret.InitiateShutdown();
 
-            return null;
+            return;
         }
 
-        private object OnTurretTarget(AutoTurret turret, BasePlayer basePlayer)
+        private bool? OnTurretTarget(AutoTurret turret, BasePlayer basePlayer)
         {
             if (turret == null || basePlayer == null || GetParentDrone(turret) == null)
                 return null;
@@ -157,7 +138,7 @@ namespace Oxide.Plugins
         }
 
         // Redirect damage from the turret to the drone.
-        private object OnEntityTakeDamage(AutoTurret turret, HitInfo info)
+        private bool? OnEntityTakeDamage(AutoTurret turret, HitInfo info)
         {
             var drone = GetParentDrone(turret);
             if (drone == null)
@@ -170,7 +151,7 @@ namespace Oxide.Plugins
         }
 
         // Redirect damage from the turret switch to the drone.
-        private object OnEntityTakeDamage(ElectricSwitch electricSwitch, HitInfo info)
+        private bool? OnEntityTakeDamage(ElectricSwitch electricSwitch, HitInfo info)
         {
             var autoTurret = GetParentTurret(electricSwitch);
             if (autoTurret == null)
@@ -192,11 +173,8 @@ namespace Oxide.Plugins
             if (sphereEntity == null)
                 return;
 
-            var drone = sphereEntity.GetParentEntity() as Drone;
-            if (drone == null)
-                return;
-
-            sphereEntity.Invoke(() => sphereEntity.Kill(), 0);
+            if (sphereEntity.GetParentEntity() is Drone)
+                sphereEntity.Invoke(() => sphereEntity.Kill(), 0);
         }
 
         private void OnEntityDeath(Drone drone)
@@ -214,6 +192,24 @@ namespace Oxide.Plugins
                 // the inventory before vanilla logic drops it.
                 turret.Die();
             }
+        }
+
+        private bool? CanPickupEntity(BasePlayer player, Drone drone)
+        {
+            if (!IsDroneEligible(drone))
+                return null;
+
+            var turret = GetDroneTurret(drone);
+            if (turret == null)
+                return null;
+
+            // Prevent drone pickup while it has a turret.
+            // A player must remove the turret first.
+            // Ignores NPC turrets since they can't be picked up.
+            if (turret != null && !(turret is NPCAutoTurret))
+                return false;
+
+            return null;
         }
 
         #endregion
@@ -254,23 +250,22 @@ namespace Oxide.Plugins
             if (!VerifyPermission(player, PermissionDeploy)
                 || !VerifyDroneFound(player, out drone)
                 || !VerifyDroneHasNoTurret(player, drone)
-                || !VerifyDroneSlotVacant(player, drone))
+                || !VerifyDroneHasSlotVacant(player, drone))
                 return;
 
-            Item autoTurretItem = null;
+            Item autoTurretPaymentItem = null;
             var conditionFraction = 1f;
 
             var basePlayer = player.Object as BasePlayer;
-            var isFree = player.HasPermission(PermissionDeployFree);
-            if (!isFree)
+            if (!player.HasPermission(PermissionDeployFree))
             {
-                autoTurretItem = FindPlayerAutoTurretItem(basePlayer);
-                if (autoTurretItem == null)
+                autoTurretPaymentItem = FindPlayerAutoTurretItem(basePlayer);
+                if (autoTurretPaymentItem == null)
                 {
                     ReplyToPlayer(player, "Error.NoTurretItem");
                     return;
                 }
-                conditionFraction = GetItemConditionFraction(autoTurretItem);
+                conditionFraction = GetItemConditionFraction(autoTurretPaymentItem);
             }
 
             if (DeployTurretWasBlocked(drone, basePlayer))
@@ -282,8 +277,8 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if (!isFree && autoTurretItem != null)
-                UseItem(basePlayer, autoTurretItem);
+            if (autoTurretPaymentItem != null)
+                UseItem(basePlayer, autoTurretPaymentItem);
         }
 
         [Command("dronenpcturret")]
@@ -297,7 +292,7 @@ namespace Oxide.Plugins
             if (!VerifyPermission(player, PermissionDeployNpc)
                 || !VerifyDroneFound(player, out drone)
                 || !VerifyDroneHasNoTurret(player, drone)
-                || !VerifyDroneSlotVacant(player, drone)
+                || !VerifyDroneHasSlotVacant(player, drone)
                 || DeployNpcTurretWasBlocked(drone, basePlayer))
                 return;
 
@@ -338,7 +333,7 @@ namespace Oxide.Plugins
             return false;
         }
 
-        private bool VerifyDroneSlotVacant(IPlayer player, Drone drone)
+        private bool VerifyDroneHasSlotVacant(IPlayer player, Drone drone)
         {
             if (drone.GetSlot(TurretSlot) == null)
                 return true;
@@ -410,15 +405,15 @@ namespace Oxide.Plugins
             entity.ClientRPCPlayer(null, player, "HitNotify");
         }
 
-        private static SphereEntity SpawnSphereEntity(Drone drone, float scale = TurretScale)
+        private static SphereEntity SpawnSphereEntity(Drone drone)
         {
             SphereEntity sphereEntity = GameManager.server.CreateEntity(SpherePrefab, SphereEntityLocalPosition) as SphereEntity;
             if (sphereEntity == null)
                 return null;
 
             SetupSphereEntity(sphereEntity);
-            sphereEntity.currentRadius = scale;
-            sphereEntity.lerpRadius = scale;
+            sphereEntity.currentRadius = TurretScale;
+            sphereEntity.lerpRadius = TurretScale;
             sphereEntity.SetParent(drone);
             sphereEntity.Spawn();
 
@@ -428,6 +423,9 @@ namespace Oxide.Plugins
         private static AutoTurret DeployTurret(Drone drone, BasePlayer deployer, float conditionFraction = 1)
         {
             SphereEntity sphereEntity = SpawnSphereEntity(drone);
+            if (sphereEntity == null)
+                return null;
+
             var turret = GameManager.server.CreateEntity(AutoTurretPrefab, TurretLocalPosition) as AutoTurret;
             if (turret == null)
             {
@@ -455,6 +453,9 @@ namespace Oxide.Plugins
         private static NPCAutoTurret DeployNpcAutoTurret(Drone drone, BasePlayer deployer)
         {
             SphereEntity sphereEntity = SpawnSphereEntity(drone);
+            if (sphereEntity == null)
+                return null;
+
             var turret = GameManager.server.CreateEntity(NpcAutoTurretPrefab, TurretLocalPosition) as NPCAutoTurret;
             if (turret == null)
             {
