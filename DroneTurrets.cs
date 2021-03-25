@@ -6,6 +6,7 @@ using Oxide.Core.Libraries.Covalence;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using VLB;
 
 namespace Oxide.Plugins
 {
@@ -491,16 +492,24 @@ namespace Oxide.Plugins
             return turret;
         }
 
-        private static void RemoveProblemComponents(BaseEntity ent)
+        private static void RemoveProblemComponents(BaseEntity entity)
         {
-            foreach (var collider in ent.GetComponentsInChildren<Collider>())
+            foreach (var collider in entity.GetComponentsInChildren<Collider>())
             {
                 if (!collider.isTrigger)
                     UnityEngine.Object.DestroyImmediate(collider);
             }
 
-            UnityEngine.Object.DestroyImmediate(ent.GetComponent<DestroyOnGroundMissing>());
-            UnityEngine.Object.DestroyImmediate(ent.GetComponent<GroundWatch>());
+            UnityEngine.Object.DestroyImmediate(entity.GetComponent<DestroyOnGroundMissing>());
+            UnityEngine.Object.DestroyImmediate(entity.GetComponent<GroundWatch>());
+        }
+
+        private static void AddRigidBodyToTriggerCollider(AutoTurret turret)
+        {
+            // Without this hack, the drone's sweep test can collide with other entities using the
+            // turret trigger collider, causing the drone to ocassionally reduce altitude like when
+            // it's close to the ground.
+            turret.targetTrigger.GetOrAddComponent<Rigidbody>().isKinematic = true;
         }
 
         private static void SetupDroneTurret(AutoTurret turret)
@@ -510,6 +519,7 @@ namespace Oxide.Plugins
 
             RemoveProblemComponents(turret);
             HideInputsAndOutputs(turret);
+            AddRigidBodyToTriggerCollider(turret);
         }
 
         private static ElectricSwitch AttachTurretSwitch(AutoTurret autoTurret)
