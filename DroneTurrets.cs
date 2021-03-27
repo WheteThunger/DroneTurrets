@@ -385,18 +385,6 @@ namespace Oxide.Plugins
             return sphereEntity != null ? sphereEntity.GetParentEntity() as Drone : null;
         }
 
-        private static Drone GetControlledDrone(BasePlayer player)
-        {
-            var computerStation = player.GetMounted() as ComputerStation;
-            if (computerStation == null)
-                return null;
-
-            return GetControlledDrone(computerStation);
-        }
-
-        private static Drone GetControlledDrone(ComputerStation computerStation) =>
-            computerStation.currentlyControllingEnt.Get(serverside: true) as Drone;
-
         private static AutoTurret GetDroneTurret(Drone drone) =>
             GetGrandChildOfType<AutoTurret>(drone);
 
