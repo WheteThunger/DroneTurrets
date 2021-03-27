@@ -215,19 +215,7 @@ namespace Oxide.Plugins
         // This hook is exposed by plugin: Remover Tool (RemoverTool).
         private bool? canRemove(BasePlayer player, Drone drone)
         {
-            if (!IsDroneEligible(drone))
-                return null;
-
-            var turret = GetDroneTurret(drone);
-            if (turret == null)
-                return null;
-
-            // Prevent drone pickup while it has a turret (the turret must be removed first).
-            // Ignores NPC turrets since they can't be picked up.
-            if (turret != null && !(turret is NPCAutoTurret))
-                return false;
-
-            return null;
+            return CanPickupEntity(player, drone);
         }
 
         #endregion
