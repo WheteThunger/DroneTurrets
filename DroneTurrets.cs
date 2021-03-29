@@ -36,8 +36,7 @@ namespace Oxide.Plugins
 
         private const BaseEntity.Slot TurretSlot = BaseEntity.Slot.UpperModifier;
 
-        private static readonly Vector3 TurretLocalPosition = new Vector3(0, -0.4f, 0);
-        private static readonly Vector3 SphereEntityLocalPosition = new Vector3(0, 0.1f, 0);
+        private static readonly Vector3 SphereEntityLocalPosition = new Vector3(0, -0.14f, 0);
         private static readonly Vector3 TurretSwitchLocalPosition = new Vector3(0, -0.64f, -0.32f);
         private static readonly Quaternion TurretSwitchLocalRotation = Quaternion.Euler(0, 180, 0);
 
@@ -420,7 +419,7 @@ namespace Oxide.Plugins
             if (sphereEntity == null)
                 return null;
 
-            var turret = GameManager.server.CreateEntity(AutoTurretPrefab, TurretLocalPosition) as AutoTurret;
+            var turret = GameManager.server.CreateEntity(AutoTurretPrefab) as AutoTurret;
             if (turret == null)
             {
                 sphereEntity.Kill();
@@ -450,7 +449,7 @@ namespace Oxide.Plugins
             if (sphereEntity == null)
                 return null;
 
-            var turret = GameManager.server.CreateEntity(NpcAutoTurretPrefab, TurretLocalPosition) as NPCAutoTurret;
+            var turret = GameManager.server.CreateEntity(NpcAutoTurretPrefab) as NPCAutoTurret;
             if (turret == null)
             {
                 sphereEntity.Kill();
