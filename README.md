@@ -6,9 +6,11 @@
 
 ## Recommended compatible plugins
 
+- [Drone Hover](https://umod.org/plugins/drone-hover) -- Allows RC drones to hover in place while not being controlled.
 - [Drone Lights](https://umod.org/plugins/drone-lights) -- Adds controllable search lights to RC drones.
 - [Drone Storage](https://umod.org/plugins/drone-storage) -- Allows players to deploy a small stash to RC drones.
   - Note: A drone may only have a stash or a turret, not both at the same time.
+- [RC Identifier Fix](https://umod.org/plugins/rc-identifier-fix) -- Auto updates RC identifiers saved in computer stations to refer to the correct entity.
 - [Better Turret Aim](https://umod.org/plugins/better-turret-aim) -- Allows mobile turrets to track targets more quickly.
 - [Turret Loadouts](https://umod.org/plugins/turret-loadouts) -- Automatically fills turrets with weapons and ammo when deployed.
 - [Turret Weapons](https://umod.org/plugins/turret-weapons) -- Allows turrets to accept more weapon types such as grenade launchers and rocket launchers.
