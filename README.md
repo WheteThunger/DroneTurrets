@@ -57,7 +57,7 @@ Note: If you are unable to steer the drone, that is likely because you have a pl
 
 #### Is it possible to remove the black sphere?
 
-No, it is required to reduce the turret size.
+Yes, by installing [Entity Scale Manager](https://umod.org/plugins/entity-scale-manager) and configuring it to hide spheres after resize. However, there is a significant performance cost to enabling that feature, so enable it cautiously, and disable it if it doesn't work out.
 
 #### Why do the NPC auto turrets not have switches?
 
