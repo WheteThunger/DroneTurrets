@@ -4,17 +4,6 @@
 - Allows players with a separate permission to deploy NPC auto turrets
 - Redirects damge from the turret to the drone
 
-## Recommended compatible plugins
-
-- [Drone Hover](https://umod.org/plugins/drone-hover) -- Allows RC drones to hover in place while not being controlled.
-- [Drone Lights](https://umod.org/plugins/drone-lights) -- Adds controllable search lights to RC drones.
-- [Drone Storage](https://umod.org/plugins/drone-storage) -- Allows players to deploy a small stash to RC drones.
-  - Note: A drone may only have a stash or a turret, not both at the same time.
-- [RC Identifier Fix](https://umod.org/plugins/rc-identifier-fix) -- Auto updates RC identifiers saved in computer stations to refer to the correct entity.
-- [Better Turret Aim](https://umod.org/plugins/better-turret-aim) -- Allows mobile turrets to track targets more quickly.
-- [Turret Loadouts](https://umod.org/plugins/turret-loadouts) -- Automatically fills turrets with weapons and ammo when deployed.
-- [Turret Weapons](https://umod.org/plugins/turret-weapons) -- Allows turrets to accept more weapon types such as grenade launchers and rocket launchers.
-
 ## Commands
 
 - `droneturret` -- Deploys an auto turret onto the drone the player is looking at, consuming an auto turret item from their inventory unless they have permission for free turrets.
@@ -77,6 +66,19 @@ Switches don't spawn on NPC auto turrets because the player wouldn't be able to 
 #### Can I use the NPC auto turrets that are seen in the Outpost monument?
 
 No. These "scientist" turrets were tested on drones during development, but they have an issue where they sometimes disappear client-side when they move away from their spawn origin. That issue is difficult to work around, so this plugin supports only the "bandit" turrets.
+
+## Recommended compatible plugins
+
+- [Drone Hover](https://umod.org/plugins/drone-hover) -- Allows RC drones to hover in place while not being controlled.
+- [Drone Lights](https://umod.org/plugins/drone-lights) -- Adds controllable search lights to RC drones.
+- [Drone Storage](https://umod.org/plugins/drone-storage) -- Allows players to deploy a small stash to RC drones.
+  - Note: A drone may only have a stash or a turret, not both at the same time.
+- [Drone Effects](https://umod.org/plugins/drone-effects) -- Adds collision effects and propeller animations to RC drones.
+- [Auto Flip Drones](https://umod.org/plugins/auto-flip-drones) -- Auto flips upside-down RC drones when a player takes control.
+- [RC Identifier Fix](https://umod.org/plugins/rc-identifier-fix) -- Auto updates RC identifiers saved in computer stations to refer to the correct entity.
+- [Better Turret Aim](https://umod.org/plugins/better-turret-aim) -- Allows mobile turrets to track targets more quickly.
+- [Turret Loadouts](https://umod.org/plugins/turret-loadouts) -- Automatically fills turrets with weapons and ammo when deployed.
+- [Turret Weapons](https://umod.org/plugins/turret-weapons) -- Allows turrets to accept more weapon types such as grenade launchers and rocket launchers.
 
 ## Developer API
 
