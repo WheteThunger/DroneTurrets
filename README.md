@@ -4,6 +4,10 @@
 - Allows players with a separate permission to deploy NPC auto turrets
 - Redirects damge from the turret to the drone
 
+## Video tutorial
+
+[![Video Tutorial](https://img.youtube.com/vi/6RQUhdjJpgA/mqdefault.jpg)](https://www.youtube.com/watch?v=6RQUhdjJpgA)
+
 ## Commands
 
 - `droneturret` -- Deploys an auto turret onto the drone the player is looking at, consuming an auto turret item from their inventory unless they have permission for free turrets.
