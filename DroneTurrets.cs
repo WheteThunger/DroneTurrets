@@ -4,6 +4,7 @@ using Newtonsoft.Json.Serialization;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -11,14 +12,14 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Drone Turrets", "WhiteThunder", "1.0.1")]
+    [Info("Drone Turrets", "WhiteThunder", "1.0.2")]
     [Description("Allows players to deploy auto turrets to RC drones.")]
     internal class DroneTurrets : CovalencePlugin
     {
         #region Fields
 
         [PluginReference]
-        Plugin EntityScaleManager;
+        Plugin DroneSettings, EntityScaleManager;
 
         private static DroneTurrets _pluginInstance;
         private static Configuration _pluginConfig;
@@ -79,6 +80,7 @@ namespace Oxide.Plugins
                 if (droneTurret == null)
                     continue;
 
+                RefreshDroneSettingsProfile(drone);
                 RefreshDroneTurret(droneTurret);
             }
         }
@@ -176,19 +178,19 @@ namespace Oxide.Plugins
 
         private void OnEntityKill(AutoTurret turret)
         {
-            var sphereEntity = turret.GetParentEntity() as SphereEntity;
-            if (sphereEntity == null)
+            SphereEntity parentSphere;
+            var drone = GetParentDrone(turret, out parentSphere);
+            if (drone == null)
                 return;
 
-            if (!(sphereEntity.GetParentEntity() is Drone))
-                return;
-
-            sphereEntity.Invoke(() =>
+            parentSphere.Invoke(() =>
             {
                 // EntityScaleManager may have already destroyed the sphere in the same frame.
-                if (!sphereEntity.IsDestroyed)
-                    sphereEntity.Kill();
+                if (!parentSphere.IsDestroyed)
+                    parentSphere.Kill();
             }, 0);
+
+            drone.Invoke(() => RefreshDroneSettingsProfile(drone), 0);
         }
 
         private void OnEntityDeath(Drone drone)
@@ -229,6 +231,12 @@ namespace Oxide.Plugins
         private bool? canRemove(BasePlayer player, Drone drone)
         {
             return CanPickupEntity(player, drone);
+        }
+
+        // This hook is exposed by plugin: Drone Settings (DroneSettings).
+        private string OnDroneTypeDetermine(Drone drone)
+        {
+            return GetDroneTurret(drone) != null ? Name : null;
         }
 
         #endregion
@@ -377,13 +385,26 @@ namespace Oxide.Plugins
             return hookResult is bool && (bool)hookResult == false;
         }
 
+        private void RefreshDroneSettingsProfile(Drone drone)
+        {
+            DroneSettings?.Call("API_RefreshDroneProfile", drone);
+        }
+
         private static bool IsDroneEligible(Drone drone) =>
             !(drone is DeliveryDrone);
 
+        private static Drone GetParentDrone(BaseEntity entity, out SphereEntity parentSphere)
+        {
+            parentSphere = entity.GetParentEntity() as SphereEntity;
+            return parentSphere != null
+                ? parentSphere.GetParentEntity() as Drone
+                : null;
+        }
+
         private static Drone GetParentDrone(BaseEntity entity)
         {
-            var sphereEntity = entity.GetParentEntity() as SphereEntity;
-            return sphereEntity != null ? sphereEntity.GetParentEntity() as Drone : null;
+            SphereEntity parentSphere;
+            return GetParentDrone(entity, out parentSphere);
         }
 
         private static AutoTurret GetDroneTurret(Drone drone) =>
@@ -645,6 +666,7 @@ namespace Oxide.Plugins
                 basePlayer.inventory.containerMain.capacity--;
             }
 
+            RefreshDroneSettingsProfile(drone);
             return autoTurret;
         }
 
@@ -752,8 +774,9 @@ namespace Oxide.Plugins
                     SaveConfig();
                 }
             }
-            catch
+            catch (Exception e)
             {
+                LogError(e.Message);
                 LogWarning($"Configuration file {Name}.json is invalid; using defaults");
                 LoadDefaultConfig();
             }
