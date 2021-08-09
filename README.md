@@ -44,7 +44,8 @@ Default configuration:
   "Error.NoTurretItem": "Error: You need an auto turret to do that.",
   "Error.AlreadyHasTurret": "Error: That drone already has a turret.",
   "Error.IncompatibleAttachment": "Error: That drone has an incompatible attachment.",
-  "Error.DeployFailed": "Error: Failed to deploy turret."
+  "Error.DeployFailed": "Error: Failed to deploy turret.",
+  "Error.CannotPickupWithTurret": "Cannot pick up that drone while it has a turret."
 }
 ```
 

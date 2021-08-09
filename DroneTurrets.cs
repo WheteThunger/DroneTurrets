@@ -212,25 +212,20 @@ namespace Oxide.Plugins
 
         private bool? CanPickupEntity(BasePlayer player, Drone drone)
         {
-            if (!IsDroneEligible(drone))
+            if (CanPickupInternal(player, drone))
                 return null;
 
-            var turret = GetDroneTurret(drone);
-            if (turret == null)
-                return null;
-
-            // Prevent drone pickup while it has a turret (the turret must be removed first).
-            // Ignores NPC turrets since they can't be picked up.
-            if (turret != null && !(turret is NPCAutoTurret))
-                return false;
-
-            return null;
+            ChatMessage(player, Lang.ErrorCannotPickupWithTurret);
+            return false;
         }
 
         // This hook is exposed by plugin: Remover Tool (RemoverTool).
-        private bool? canRemove(BasePlayer player, Drone drone)
+        private string canRemove(BasePlayer player, Drone drone)
         {
-            return CanPickupEntity(player, drone);
+            if (CanPickupInternal(player, drone))
+                return null;
+
+            return GetMessage(player, Lang.ErrorCannotPickupWithTurret);
         }
 
         // This hook is exposed by plugin: Drone Settings (DroneSettings).
@@ -440,6 +435,23 @@ namespace Oxide.Plugins
                 }
             }
             return null;
+        }
+
+        private static bool CanPickupInternal(BasePlayer player, Drone drone)
+        {
+            if (!IsDroneEligible(drone))
+                return true;
+
+            var turret = GetDroneTurret(drone);
+            if (turret == null)
+                return true;
+
+            // Prevent drone pickup while it has a turret (the turret must be removed first).
+            // Ignores NPC turrets since they can't be picked up.
+            if (turret != null && !(turret is NPCAutoTurret))
+                return false;
+
+            return true;
         }
 
         private static void HitNotify(BaseEntity entity, HitInfo info)
@@ -819,6 +831,9 @@ namespace Oxide.Plugins
         private string GetMessage(IPlayer player, string messageName, params object[] args) =>
             GetMessage(player.Id, messageName, args);
 
+        private string GetMessage(BasePlayer player, string messageName, params object[] args) =>
+            GetMessage(player.UserIDString, messageName, args);
+
         private string GetMessage(string playerId, string messageName, params object[] args)
         {
             var message = lang.GetMessage(messageName, this, playerId);
@@ -835,6 +850,7 @@ namespace Oxide.Plugins
             public const string ErrorAlreadyHasTurret = "Error.AlreadyHasTurret";
             public const string ErrorIncompatibleAttachment = "Error.IncompatibleAttachment";
             public const string ErrorDeployFailed = "Error.DeployFailed";
+            public const string ErrorCannotPickupWithTurret = "Error.CannotPickupWithTurret";
         }
 
         protected override void LoadDefaultMessages()
@@ -849,6 +865,7 @@ namespace Oxide.Plugins
                 [Lang.ErrorAlreadyHasTurret] = "Error: That drone already has a turret.",
                 [Lang.ErrorIncompatibleAttachment] = "Error: That drone has an incompatible attachment.",
                 [Lang.ErrorDeployFailed] = "Error: Failed to deploy turret.",
+                [Lang.ErrorCannotPickupWithTurret] = "Cannot pick up that drone while it has a turret.",
             }, this, "en");
         }
 
