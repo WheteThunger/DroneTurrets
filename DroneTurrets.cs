@@ -111,7 +111,7 @@ namespace Oxide.Plugins
                 else if (permission.UserHasPermission(player.UserIDString, PermissionDeploy)
                     && UnityEngine.Random.Range(0, 100) < _pluginConfig.TipChance)
                 {
-                    ChatMessage(player, "Tip.DeployCommand");
+                    ChatMessage(player, Lang.TipDeployCommand);
                 }
             });
         }
@@ -289,7 +289,7 @@ namespace Oxide.Plugins
                 autoTurretPaymentItem = FindPlayerAutoTurretItem(basePlayer);
                 if (autoTurretPaymentItem == null)
                 {
-                    ReplyToPlayer(player, "Error.NoTurretItem");
+                    ReplyToPlayer(player, Lang.ErrorNoTurretItem);
                     return;
                 }
                 conditionFraction = GetItemConditionFraction(autoTurretPaymentItem);
@@ -300,7 +300,7 @@ namespace Oxide.Plugins
 
             if (DeployAutoTurret(drone, basePlayer, conditionFraction) == null)
             {
-                ReplyToPlayer(player, "Error.DeployFailed");
+                ReplyToPlayer(player, Lang.ErrorDeployFailed);
                 return;
             }
 
@@ -324,7 +324,7 @@ namespace Oxide.Plugins
                 return;
 
             if (DeployNpcAutoTurret(drone, basePlayer) == null)
-                ReplyToPlayer(player, "Error.DeployFailed");
+                ReplyToPlayer(player, Lang.ErrorDeployFailed);
         }
 
         #endregion
@@ -336,7 +336,7 @@ namespace Oxide.Plugins
             if (player.HasPermission(perm))
                 return true;
 
-            ReplyToPlayer(player, "Error.NoPermission");
+            ReplyToPlayer(player, Lang.ErrorNoPermission);
             return false;
         }
 
@@ -347,7 +347,7 @@ namespace Oxide.Plugins
             if (drone != null && IsDroneEligible(drone))
                 return true;
 
-            ReplyToPlayer(player, "Error.NoDroneFound");
+            ReplyToPlayer(player, Lang.ErrorNoDroneFound);
             return false;
         }
 
@@ -356,7 +356,7 @@ namespace Oxide.Plugins
             if (GetDroneTurret(drone) == null)
                 return true;
 
-            ReplyToPlayer(player, "Error.AlreadyHasTurret");
+            ReplyToPlayer(player, Lang.ErrorAlreadyHasTurret);
             return false;
         }
 
@@ -365,7 +365,7 @@ namespace Oxide.Plugins
             if (drone.GetSlot(TurretSlot) == null)
                 return true;
 
-            ReplyToPlayer(player, "Error.IncompatibleAttachment");
+            ReplyToPlayer(player, Lang.ErrorIncompatibleAttachment);
             return false;
         }
 
@@ -807,17 +807,28 @@ namespace Oxide.Plugins
             return args.Length > 0 ? string.Format(message, args) : message;
         }
 
+        private class Lang
+        {
+            public const string TipDeployCommand = "Tip.DeployCommand";
+            public const string ErrorNoPermission = "Error.NoPermission";
+            public const string ErrorNoDroneFound = "Error.NoDroneFound";
+            public const string ErrorNoTurretItem = "Error.NoTurretItem";
+            public const string ErrorAlreadyHasTurret = "Error.AlreadyHasTurret";
+            public const string ErrorIncompatibleAttachment = "Error.IncompatibleAttachment";
+            public const string ErrorDeployFailed = "Error.DeployFailed";
+        }
+
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
-                ["Tip.DeployCommand"] = "Tip: Look at the drone and run <color=yellow>/droneturret</color> to deploy a turret.",
-                ["Error.NoPermission"] = "You don't have permission to do that.",
-                ["Error.NoDroneFound"] = "Error: No drone found.",
-                ["Error.NoTurretItem"] = "Error: You need an auto turret to do that.",
-                ["Error.AlreadyHasTurret"] = "Error: That drone already has a turret.",
-                ["Error.IncompatibleAttachment"] = "Error: That drone has an incompatible attachment.",
-                ["Error.DeployFailed"] = "Error: Failed to deploy turret.",
+                [Lang.TipDeployCommand] = "Tip: Look at the drone and run <color=yellow>/droneturret</color> to deploy a turret.",
+                [Lang.ErrorNoPermission] = "You don't have permission to do that.",
+                [Lang.ErrorNoDroneFound] = "Error: No drone found.",
+                [Lang.ErrorNoTurretItem] = "Error: You need an auto turret to do that.",
+                [Lang.ErrorAlreadyHasTurret] = "Error: That drone already has a turret.",
+                [Lang.ErrorIncompatibleAttachment] = "Error: That drone has an incompatible attachment.",
+                [Lang.ErrorDeployFailed] = "Error: Failed to deploy turret.",
             }, this, "en");
         }
 
