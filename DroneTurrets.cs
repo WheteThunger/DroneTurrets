@@ -273,6 +273,10 @@ namespace Oxide.Plugins
             if (player.IsServer)
                 return;
 
+            var basePlayer = player.Object as BasePlayer;
+            if (!basePlayer.CanInteract())
+                return;
+
             Drone drone;
             if (!VerifyPermission(player, PermissionDeploy)
                 || !VerifyDroneFound(player, out drone)
@@ -284,7 +288,6 @@ namespace Oxide.Plugins
             Item autoTurretPaymentItem = null;
             var conditionFraction = 1f;
 
-            var basePlayer = player.Object as BasePlayer;
             if (!player.HasPermission(PermissionDeployFree))
             {
                 autoTurretPaymentItem = FindPlayerAutoTurretItem(basePlayer);
@@ -316,6 +319,9 @@ namespace Oxide.Plugins
                 return;
 
             var basePlayer = player.Object as BasePlayer;
+            if (!basePlayer.CanInteract())
+                return;
+
             Drone drone;
             if (!VerifyPermission(player, PermissionDeployNpc)
                 || !VerifyDroneFound(player, out drone)
