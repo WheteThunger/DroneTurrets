@@ -441,21 +441,7 @@ namespace Oxide.Plugins
         }
 
         private static AutoTurret GetDroneTurret(Drone drone) =>
-            GetGrandChildOfType<AutoTurret>(drone);
-
-        private static T GetGrandChildOfType<T>(BaseEntity entity) where T : BaseEntity
-        {
-            foreach (var child in entity.children)
-            {
-                foreach (var grandChild in child.children)
-                {
-                    var grandChildOfType = grandChild as T;
-                    if (grandChildOfType != null)
-                        return grandChildOfType;
-                }
-            }
-            return null;
-        }
+            drone.GetSlot(TurretSlot) as AutoTurret;
 
         private static bool CanPickupInternal(BasePlayer player, Drone drone)
         {
@@ -642,7 +628,7 @@ namespace Oxide.Plugins
             turret.SetParent(sphereEntity);
             turret.Spawn();
 
-            drone.SetSlot(BaseEntity.Slot.UpperModifier, turret);
+            drone.SetSlot(TurretSlot, turret);
             SetupDroneTurret(drone, turret, sphereEntity);
 
             Effect.server.Run(DeployEffectPrefab, turret.transform.position);
