@@ -40,6 +40,7 @@ Default configuration:
   "Tip.DeployCommand": "Tip: Look at the drone and run <color=yellow>/droneturret</color> to deploy a turret.",
   "Error.NoPermission": "You don't have permission to do that.",
   "Error.NoDroneFound": "Error: No drone found.",
+  "Error.BuildingBlocked": "Error: Cannot do that while building blocked.",
   "Error.NoTurretItem": "Error: You need an auto turret to do that.",
   "Error.AlreadyHasTurret": "Error: That drone already has a turret.",
   "Error.IncompatibleAttachment": "Error: That drone has an incompatible attachment.",

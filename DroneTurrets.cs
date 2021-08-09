@@ -276,6 +276,7 @@ namespace Oxide.Plugins
             Drone drone;
             if (!VerifyPermission(player, PermissionDeploy)
                 || !VerifyDroneFound(player, out drone)
+                || !VerifyCanBuild(player, drone)
                 || !VerifyDroneHasNoTurret(player, drone)
                 || !VerifyDroneHasSlotVacant(player, drone))
                 return;
@@ -318,6 +319,7 @@ namespace Oxide.Plugins
             Drone drone;
             if (!VerifyPermission(player, PermissionDeployNpc)
                 || !VerifyDroneFound(player, out drone)
+                || !VerifyCanBuild(player, drone)
                 || !VerifyDroneHasNoTurret(player, drone)
                 || !VerifyDroneHasSlotVacant(player, drone)
                 || DeployNpcTurretWasBlocked(drone, basePlayer))
@@ -348,6 +350,16 @@ namespace Oxide.Plugins
                 return true;
 
             ReplyToPlayer(player, Lang.ErrorNoDroneFound);
+            return false;
+        }
+
+        private bool VerifyCanBuild(IPlayer player, Drone drone)
+        {
+            var basePlayer = player.Object as BasePlayer;
+            if (basePlayer.CanBuild() && basePlayer.CanBuild(drone.WorldSpaceBounds()))
+                return true;
+
+            ReplyToPlayer(player, Lang.ErrorBuildingBlocked);
             return false;
         }
 
@@ -812,6 +824,7 @@ namespace Oxide.Plugins
             public const string TipDeployCommand = "Tip.DeployCommand";
             public const string ErrorNoPermission = "Error.NoPermission";
             public const string ErrorNoDroneFound = "Error.NoDroneFound";
+            public const string ErrorBuildingBlocked = "Error.BuildingBlocked";
             public const string ErrorNoTurretItem = "Error.NoTurretItem";
             public const string ErrorAlreadyHasTurret = "Error.AlreadyHasTurret";
             public const string ErrorIncompatibleAttachment = "Error.IncompatibleAttachment";
@@ -825,6 +838,7 @@ namespace Oxide.Plugins
                 [Lang.TipDeployCommand] = "Tip: Look at the drone and run <color=yellow>/droneturret</color> to deploy a turret.",
                 [Lang.ErrorNoPermission] = "You don't have permission to do that.",
                 [Lang.ErrorNoDroneFound] = "Error: No drone found.",
+                [Lang.ErrorBuildingBlocked] = "Error: Cannot do that while building blocked.",
                 [Lang.ErrorNoTurretItem] = "Error: You need an auto turret to do that.",
                 [Lang.ErrorAlreadyHasTurret] = "Error: That drone already has a turret.",
                 [Lang.ErrorIncompatibleAttachment] = "Error: That drone has an incompatible attachment.",
