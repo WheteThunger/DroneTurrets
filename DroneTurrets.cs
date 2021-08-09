@@ -48,6 +48,16 @@ namespace Oxide.Plugins
         private static readonly Vector3 SphereTransformScale = new Vector3(TurretScale, TurretScale, TurretScale);
         private static readonly Vector3 TurretTransformScale = new Vector3(1 / TurretScale, 1 / TurretScale, 1 / TurretScale);
 
+        private DynamicHookSubscriber<uint> _turretDroneTracker = new DynamicHookSubscriber<uint>(
+            nameof(OnSwitchToggled),
+            nameof(OnTurretTarget),
+            nameof(OnEntityTakeDamage),
+            nameof(OnEntityKill),
+            nameof(OnEntityDeath),
+            nameof(CanPickupEntity),
+            nameof(canRemove)
+        );
+
         #endregion
 
         #region Hooks
@@ -60,6 +70,8 @@ namespace Oxide.Plugins
             permission.RegisterPermission(PermissionDeployNpc, this);
             permission.RegisterPermission(PermissionDeployFree, this);
             permission.RegisterPermission(PermissionAutoDeploy, this);
+
+            _turretDroneTracker.UnsubscribeAll();
         }
 
         private void Unload()
@@ -80,8 +92,7 @@ namespace Oxide.Plugins
                 if (droneTurret == null)
                     continue;
 
-                RefreshDroneSettingsProfile(drone);
-                RefreshDroneTurret(droneTurret);
+                RefreshDroneTurret(drone, droneTurret);
             }
         }
 
@@ -176,6 +187,14 @@ namespace Oxide.Plugins
             return true;
         }
 
+        private void OnEntityKill(Drone drone)
+        {
+            if (GetDroneTurret(drone))
+                return;
+
+            _turretDroneTracker.Remove(drone.net.ID);
+        }
+
         private void OnEntityKill(AutoTurret turret)
         {
             SphereEntity parentSphere;
@@ -190,6 +209,7 @@ namespace Oxide.Plugins
                     parentSphere.Kill();
             }, 0);
 
+            _turretDroneTracker.Remove(drone.net.ID);
             drone.Invoke(() => RefreshDroneSettingsProfile(drone), 0);
         }
 
@@ -481,62 +501,6 @@ namespace Oxide.Plugins
         private static void RegisterWithEntityScaleManager(BaseEntity entity) =>
             _pluginInstance.EntityScaleManager?.Call("API_RegisterScaledEntity", entity);
 
-        private static AutoTurret DeployTurret(Drone drone, BasePlayer deployer, float conditionFraction = 1)
-        {
-            SphereEntity sphereEntity = SpawnSphereEntity(drone);
-            if (sphereEntity == null)
-                return null;
-
-            var turret = GameManager.server.CreateEntity(AutoTurretPrefab) as AutoTurret;
-            if (turret == null)
-            {
-                sphereEntity.Kill();
-                return null;
-            }
-
-            if (deployer != null)
-                turret.OwnerID = deployer.userID;
-
-            SetupDroneTurret(turret, sphereEntity);
-            turret.SetFlag(IOEntity.Flag_HasPower, true);
-            turret.SetParent(sphereEntity);
-            turret.Spawn();
-            turret.SetHealth(turret.MaxHealth() * conditionFraction);
-            AttachTurretSwitch(turret);
-            drone.SetSlot(TurretSlot, turret);
-
-            RegisterWithEntityScaleManager(turret);
-
-            Effect.server.Run(DeployEffectPrefab, turret.transform.position);
-            Interface.CallHook("OnDroneTurretDeployed", drone, turret, deployer);
-
-            return turret;
-        }
-
-        private static NPCAutoTurret DeployNpcAutoTurret(Drone drone, BasePlayer deployer)
-        {
-            SphereEntity sphereEntity = SpawnSphereEntity(drone);
-            if (sphereEntity == null)
-                return null;
-
-            var turret = GameManager.server.CreateEntity(NpcAutoTurretPrefab) as NPCAutoTurret;
-            if (turret == null)
-            {
-                sphereEntity.Kill();
-                return null;
-            }
-
-            SetupDroneTurret(turret, sphereEntity);
-            turret.SetParent(sphereEntity);
-            turret.Spawn();
-            drone.SetSlot(BaseEntity.Slot.UpperModifier, turret);
-
-            Effect.server.Run(DeployEffectPrefab, turret.transform.position);
-            Interface.CallHook("OnDroneNpcTurretDeployed", drone, turret, deployer);
-
-            return turret;
-        }
-
         private static void RemoveProblemComponents(BaseEntity entity)
         {
             foreach (var collider in entity.GetComponentsInChildren<Collider>())
@@ -555,22 +519,6 @@ namespace Oxide.Plugins
             // turret trigger collider, causing the drone to ocassionally reduce altitude like when
             // it's close to the ground.
             turret.targetTrigger.GetOrAddComponent<Rigidbody>().isKinematic = true;
-        }
-
-        private static void SetupDroneTurret(AutoTurret turret, SphereEntity sphereEntity)
-        {
-            // Damage will be processed by the drone.
-            turret.baseProtection = null;
-
-            RemoveProblemComponents(turret);
-            HideInputsAndOutputs(turret);
-            AddRigidBodyToTriggerCollider(turret);
-
-            // Invert the localScale of the turret to compensate for the sphereEntity localScale being increased.
-            // Without doing this, the range of the turret corresponds to the sphere scale.
-            // This works fine for now because the only colliders remaining are triggers.
-            // This will require a different approach if the non-trigger colliders are reintroduced.
-            turret.transform.localScale = TurretTransformScale;
         }
 
         private static ElectricSwitch AttachTurretSwitch(AutoTurret autoTurret)
@@ -618,22 +566,6 @@ namespace Oxide.Plugins
             sphereEntity.transform.localScale = SphereTransformScale;
         }
 
-        private static void RefreshDroneTurret(AutoTurret turret)
-        {
-            var sphereEntity = turret.GetParentEntity() as SphereEntity;
-            if (sphereEntity == null)
-                return;
-
-            SetupSphereEntity(sphereEntity);
-            SetupDroneTurret(turret, sphereEntity);
-
-            var electricSwitch = turret.GetComponentInChildren<ElectricSwitch>();
-            if (electricSwitch != null)
-                SetupTurretSwitch(electricSwitch);
-
-            RegisterWithEntityScaleManager(turret);
-        }
-
         private static BaseEntity GetLookEntity(BasePlayer basePlayer, float maxDistance = 3)
         {
             RaycastHit hit;
@@ -660,27 +592,108 @@ namespace Oxide.Plugins
         private static Item FindPlayerAutoTurretItem(BasePlayer basePlayer) =>
             basePlayer.inventory.FindItemID(AutoTurretItemId);
 
-        private AutoTurret DeployAutoTurret(Drone drone, BasePlayer basePlayer, float conditionFraction = 1)
+        private void SetupDroneTurret(Drone drone, AutoTurret turret, SphereEntity sphereEntity)
         {
-            var autoTurret = DeployTurret(drone, basePlayer, conditionFraction);
-            if (autoTurret == null)
+            // Damage will be processed by the drone.
+            turret.baseProtection = null;
+
+            RemoveProblemComponents(turret);
+            HideInputsAndOutputs(turret);
+            AddRigidBodyToTriggerCollider(turret);
+
+            // Invert the localScale of the turret to compensate for the sphereEntity localScale being increased.
+            // Without doing this, the range of the turret corresponds to the sphere scale.
+            // This works fine for now because the only colliders remaining are triggers.
+            // This will require a different approach if the non-trigger colliders are reintroduced.
+            turret.transform.localScale = TurretTransformScale;
+
+            RegisterWithEntityScaleManager(turret);
+            RefreshDroneSettingsProfile(drone);
+            _turretDroneTracker.Add(drone.net.ID);
+        }
+
+        private void RefreshDroneTurret(Drone drone, AutoTurret turret)
+        {
+            var sphereEntity = turret.GetParentEntity() as SphereEntity;
+            if (sphereEntity == null)
+                return;
+
+            SetupSphereEntity(sphereEntity);
+            SetupDroneTurret(drone, turret, sphereEntity);
+
+            var electricSwitch = turret.GetComponentInChildren<ElectricSwitch>();
+            if (electricSwitch != null)
+                SetupTurretSwitch(electricSwitch);
+        }
+
+        private NPCAutoTurret DeployNpcAutoTurret(Drone drone, BasePlayer deployer)
+        {
+            SphereEntity sphereEntity = SpawnSphereEntity(drone);
+            if (sphereEntity == null)
                 return null;
 
-            if (basePlayer == null)
-                return autoTurret;
+            var turret = GameManager.server.CreateEntity(NpcAutoTurretPrefab) as NPCAutoTurret;
+            if (turret == null)
+            {
+                sphereEntity.Kill();
+                return null;
+            }
 
-            autoTurret.authorizedPlayers.Add(new ProtoBuf.PlayerNameID
+            turret.SetParent(sphereEntity);
+            turret.Spawn();
+
+            drone.SetSlot(BaseEntity.Slot.UpperModifier, turret);
+            SetupDroneTurret(drone, turret, sphereEntity);
+
+            Effect.server.Run(DeployEffectPrefab, turret.transform.position);
+            Interface.CallHook("OnDroneNpcTurretDeployed", drone, turret, deployer);
+
+            return turret;
+        }
+
+        private AutoTurret DeployAutoTurret(Drone drone, BasePlayer basePlayer, float conditionFraction = 1)
+        {
+            SphereEntity sphereEntity = SpawnSphereEntity(drone);
+            if (sphereEntity == null)
+                return null;
+
+            var turret = GameManager.server.CreateEntity(AutoTurretPrefab) as AutoTurret;
+            if (turret == null)
+            {
+                sphereEntity.Kill();
+                return null;
+            }
+
+            if (basePlayer != null)
+                turret.OwnerID = basePlayer.userID;
+
+            turret.SetFlag(IOEntity.Flag_HasPower, true);
+            turret.SetParent(sphereEntity);
+            turret.Spawn();
+            turret.SetHealth(turret.MaxHealth() * conditionFraction);
+            AttachTurretSwitch(turret);
+
+            drone.SetSlot(TurretSlot, turret);
+            SetupDroneTurret(drone, turret, sphereEntity);
+
+            Effect.server.Run(DeployEffectPrefab, turret.transform.position);
+            Interface.CallHook("OnDroneTurretDeployed", drone, turret, basePlayer);
+
+            if (basePlayer == null)
+                return turret;
+
+            turret.authorizedPlayers.Add(new ProtoBuf.PlayerNameID
             {
                 userid = basePlayer.userID,
                 username = basePlayer.displayName
             });
-            autoTurret.SendNetworkUpdate();
+            turret.SendNetworkUpdate();
 
             // Allow other plugins to detect the auto turret being deployed (e.g., to add a weapon automatically).
             var turretItem = FindPlayerAutoTurretItem(basePlayer);
             if (turretItem != null)
             {
-                RunOnEntityBuilt(turretItem, autoTurret);
+                RunOnEntityBuilt(turretItem, turret);
             }
             else
             {
@@ -689,15 +702,53 @@ namespace Oxide.Plugins
                 var temporaryTurretItem = ItemManager.CreateByItemID(AutoTurretItemId);
                 if (basePlayer.inventory.GiveItem(temporaryTurretItem))
                 {
-                    RunOnEntityBuilt(temporaryTurretItem, autoTurret);
+                    RunOnEntityBuilt(temporaryTurretItem, turret);
                     temporaryTurretItem.RemoveFromContainer();
                 }
                 temporaryTurretItem.Remove();
                 basePlayer.inventory.containerMain.capacity--;
             }
 
-            RefreshDroneSettingsProfile(drone);
-            return autoTurret;
+            return turret;
+        }
+
+        #endregion
+
+        #region Dynamic Hook Subscriptions
+
+        private class DynamicHookSubscriber<T>
+        {
+            private HashSet<T> _list = new HashSet<T>();
+            private string[] _hookNames;
+
+            public DynamicHookSubscriber(params string[] hookNames)
+            {
+                _hookNames = hookNames;
+            }
+
+            public void Add(T item)
+            {
+                if (_list.Add(item) && _list.Count == 1)
+                    SubscribeAll();
+            }
+
+            public void Remove(T item)
+            {
+                if (_list.Remove(item) && _list.Count == 0)
+                    UnsubscribeAll();
+            }
+
+            public void SubscribeAll()
+            {
+                foreach (var hookName in _hookNames)
+                    _pluginInstance.Subscribe(hookName);
+            }
+
+            public void UnsubscribeAll()
+            {
+                foreach (var hookName in _hookNames)
+                    _pluginInstance.Unsubscribe(hookName);
+            }
         }
 
         #endregion
