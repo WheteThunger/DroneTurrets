@@ -12,7 +12,7 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Drone Turrets", "WhiteThunder", "1.0.2")]
+    [Info("Drone Turrets", "WhiteThunder", "1.1.0")]
     [Description("Allows players to deploy auto turrets to RC drones.")]
     internal class DroneTurrets : CovalencePlugin
     {
