@@ -27,10 +27,14 @@ Default configuration:
 
 ```json
 {
+  "TargetNPCs": true,
+  "TargetAnimals": true,
   "TipChance": 25
 }
 ```
 
+- `TargetNPCs` (`true` or `false`) -- Whether drone-mounted turrets should target NPCs.
+- `TargetAnimals` (`true` or `false`) -- Whether drone-mounted turrets should target NPC animals such as bears.
 - `TipChance` (`0` - `100`) -- Chance that a tip message will be shown to a player when they deploy a drone, informing them that they can use the `/droneturret` command. Only applies to players with the `droneturrets.deploy` permission who do not have the `droneturrets.autodeploy` permission.
 
 ## Localization

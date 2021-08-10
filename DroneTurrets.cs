@@ -145,14 +145,26 @@ namespace Oxide.Plugins
             return;
         }
 
-        private bool? OnTurretTarget(AutoTurret turret, BasePlayer basePlayer)
+        private bool? OnTurretTarget(AutoTurret turret, BaseCombatEntity target)
         {
-            if (turret == null || basePlayer == null || GetParentDrone(turret) == null)
+            if (turret == null || target == null || GetParentDrone(turret) == null)
                 return null;
 
-            // Don't target human or NPC players in safe zones, unless they are hostile.
-            if (basePlayer.InSafeZone() && (basePlayer.IsNpc || !basePlayer.IsHostile()))
+            if (target is BaseAnimalNPC && !_pluginConfig.TargetAnimals)
                 return false;
+
+            var basePlayer = target as BasePlayer;
+            if (basePlayer != null)
+            {
+                if (basePlayer.IsNpc && !_pluginConfig.TargetNPCs)
+                    return false;
+
+                // Don't target human or NPC players in safe zones, unless they are hostile.
+                if (basePlayer.InSafeZone() && (basePlayer.IsNpc || !basePlayer.IsHostile()))
+                    return false;
+
+                return null;
+            }
 
             return null;
         }
@@ -743,6 +755,12 @@ namespace Oxide.Plugins
 
         private class Configuration : SerializableConfiguration
         {
+            [JsonProperty("TargetNPCs")]
+            public bool TargetNPCs = true;
+
+            [JsonProperty("TargetAnimals")]
+            public bool TargetAnimals = true;
+
             [JsonProperty("TipChance")]
             public int TipChance = 25;
         }
