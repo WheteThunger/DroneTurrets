@@ -36,6 +36,7 @@ namespace Oxide.Plugins
         private const string NpcAutoTurretPrefab = "assets/content/props/sentry_scientists/sentry.bandit.static.prefab";
         private const string ElectricSwitchPrefab = "assets/prefabs/deployable/playerioents/simpleswitch/switch.prefab";
         private const string DeployEffectPrefab = "assets/prefabs/npc/autoturret/effects/autoturret-deploy.prefab";
+        private const string CodeLockDeniedEffectPrefab = "assets/prefabs/locks/keypad/effects/lock.code.denied.prefab";
 
         private const int AutoTurretItemId = -2139580305;
 
@@ -49,6 +50,7 @@ namespace Oxide.Plugins
         private static readonly Vector3 TurretTransformScale = new Vector3(1 / TurretScale, 1 / TurretScale, 1 / TurretScale);
 
         private DynamicHookSubscriber<uint> _turretDroneTracker = new DynamicHookSubscriber<uint>(
+            nameof(OnSwitchToggle),
             nameof(OnSwitchToggled),
             nameof(OnTurretTarget),
             nameof(OnEntityTakeDamage),
@@ -127,20 +129,40 @@ namespace Oxide.Plugins
             });
         }
 
+        private bool? OnSwitchToggle(ElectricSwitch electricSwitch, BasePlayer player)
+        {
+            var turret = GetParentTurret(electricSwitch);
+            if (turret == null)
+                return null;
+
+            var drone = GetParentDrone(turret);
+            if (drone == null)
+                return null;
+
+            if (!player.CanBuild())
+            {
+                // Disallow switching the turret on and off while building blocked.
+                Effect.server.Run(CodeLockDeniedEffectPrefab, electricSwitch, 0, Vector3.zero, Vector3.forward);
+                return false;
+            }
+
+            return null;
+        }
+
         private void OnSwitchToggled(ElectricSwitch electricSwitch)
         {
-            var autoTurret = GetParentTurret(electricSwitch);
-            if (autoTurret == null)
+            var turret = GetParentTurret(electricSwitch);
+            if (turret == null)
                 return;
 
-            var drone = GetParentDrone(autoTurret);
+            var drone = GetParentDrone(turret);
             if (drone == null)
                 return;
 
             if (electricSwitch.IsOn())
-                autoTurret.InitiateStartup();
+                turret.InitiateStartup();
             else
-                autoTurret.InitiateShutdown();
+                turret.InitiateShutdown();
 
             return;
         }
