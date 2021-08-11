@@ -680,12 +680,15 @@ namespace Oxide.Plugins
             if (basePlayer == null)
                 return turret;
 
-            turret.authorizedPlayers.Add(new ProtoBuf.PlayerNameID
+            if (!turret.IsAuthed(basePlayer))
             {
-                userid = basePlayer.userID,
-                username = basePlayer.displayName
-            });
-            turret.SendNetworkUpdate();
+                turret.authorizedPlayers.Add(new ProtoBuf.PlayerNameID
+                {
+                    userid = basePlayer.userID,
+                    username = basePlayer.displayName
+                });
+                turret.SendNetworkUpdate();
+            }
 
             // Allow other plugins to detect the auto turret being deployed (e.g., to add a weapon automatically).
             var turretItem = FindPlayerAutoTurretItem(basePlayer);
