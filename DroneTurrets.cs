@@ -922,6 +922,19 @@ namespace Oxide.Plugins
                 [Lang.ErrorDeployFailed] = "Error: Failed to deploy turret.",
                 [Lang.ErrorCannotPickupWithTurret] = "Cannot pick up that drone while it has a turret.",
             }, this, "en");
+            //Add pt-BR
+            lang.RegisterMessages(new Dictionary<string, string>
+            {
+                [Lang.TipDeployCommand] = "Dica: olhe para o drone e execute <color=yellow>/droneturret</color> para implantar uma torre.",
+                [Lang.ErrorNoPermission] = "Você não tem permissão para fazer isso.",
+                [Lang.ErrorNoDroneFound] = "Erro: Nenhum drone encontrado.",
+                [Lang.ErrorBuildingBlocked] = "Erro: Não é possível fazer isso enquanto o edifício está bloqueado.",
+                [Lang.ErrorNoTurretItem] = "Erro: você precisa de uma torre automática para fazer isso.",
+                [Lang.ErrorAlreadyHasTurret] = "Erro: esse drone já tem uma torre.",
+                [Lang.ErrorIncompatibleAttachment] = "Erro: esse drone tem um anexo incompatível.",
+                [Lang.ErrorDeployFailed] = "Erro: falha ao implantar a torre.",
+                [Lang.ErrorCannotPickupWithTurret] = "Não é possível pegar aquele drone enquanto ele tiver uma torre.",
+            }, this, "pt-BR");
         }
 
         #endregion
