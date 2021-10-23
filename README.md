@@ -1,12 +1,12 @@
+## Video tutorial
+
+[![Video Tutorial](https://img.youtube.com/vi/6RQUhdjJpgA/mqdefault.jpg)](https://www.youtube.com/watch?v=6RQUhdjJpgA)
+
 ## Features
 
 - Allows players with permission to deploy auto turrets onto RC drones
 - Allows players with a separate permission to deploy NPC auto turrets
 - Redirects damge from the turret to the drone
-
-## Video tutorial
-
-[![Video Tutorial](https://img.youtube.com/vi/6RQUhdjJpgA/mqdefault.jpg)](https://www.youtube.com/watch?v=6RQUhdjJpgA)
 
 ## Commands
 
