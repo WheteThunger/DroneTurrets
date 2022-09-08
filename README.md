@@ -8,11 +8,6 @@
 - Allows players with a separate permission to deploy NPC auto turrets
 - Redirects damge from the turret to the drone
 
-## Commands
-
-- `droneturret` -- Deploys an auto turret onto the drone the player is looking at, consuming an auto turret item from their inventory unless they have permission for free turrets.
-- `dronenpcturret` -- Deploys an NPC auto turret onto the drone the player is looking at. Does not consume any items.
-
 ## Permissions
 
 - `droneturrets.deploy` -- Required to use the `droneturret` command.
@@ -21,20 +16,33 @@
 - `droneturrets.autodeploy` -- Deploying a drone while you have this permission will automatically deploy an auto turret to it, free of charge.
   - Not recommended if you want to allow players to deploy other attachments such as stashes since they are incompatible.
 
+## Commands
+
+- `droneturret` -- Deploys an auto turret onto the drone the player is looking at, consuming an auto turret item from their inventory unless they have permission for free turrets.
+- `dronenpcturret` -- Deploys an NPC auto turret onto the drone the player is looking at. Does not consume any items.
+
 ## Configuration
 
 Default configuration:
 
 ```json
 {
+  "TargetPlayers": true,
   "TargetNPCs": true,
   "TargetAnimals": true,
+  "EnableAudioAlarm": false,
+  "EnableSirenLight": false,
+  "TurretRange": 30.0,
   "TipChance": 25
 }
 ```
 
+- `TargetPlayers` (`true` or `false`) -- Whether drone-mounted turrets should target real players.
 - `TargetNPCs` (`true` or `false`) -- Whether drone-mounted turrets should target NPCs.
 - `TargetAnimals` (`true` or `false`) -- Whether drone-mounted turrets should target NPC animals such as bears.
+- `EnableAudioAlarm` (`true` or `false`) -- Whether drone-mounted turrets should play an audio alarm for nearby players to hear, while the turret is powered, and while the drone is being controlled or hovering.
+- `EnableSirenLight` (`true` or `false`) -- Whether drone-mounted turrets should have a flashing siren light to warn nearby players, while the turret is powered, and while the drone is being controlled or hovering.
+- `TurretRange` (`true` or `false`) -- The range of drone-mounted turrets.
 - `TipChance` (`0` - `100`) -- Chance that a tip message will be shown to a player when they deploy a drone, informing them that they can use the `/droneturret` command. Only applies to players with the `droneturrets.deploy` permission who do not have the `droneturrets.autodeploy` permission.
 
 ## Localization

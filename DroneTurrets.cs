@@ -12,7 +12,7 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Drone Turrets", "WhiteThunder", "1.1.0")]
+    [Info("Drone Turrets", "WhiteThunder", "1.2.0")]
     [Description("Allows players to deploy auto turrets to RC drones.")]
     internal class DroneTurrets : CovalencePlugin
     {
@@ -35,6 +35,9 @@ namespace Oxide.Plugins
         private const string AutoTurretPrefab = "assets/prefabs/npc/autoturret/autoturret_deployed.prefab";
         private const string NpcAutoTurretPrefab = "assets/content/props/sentry_scientists/sentry.bandit.static.prefab";
         private const string ElectricSwitchPrefab = "assets/prefabs/deployable/playerioents/simpleswitch/switch.prefab";
+        // private const string AlarmPrefab = "assets/prefabs/io/electric/other/alarmsound.prefab";
+        private const string AlarmPrefab = "assets/prefabs/deployable/playerioents/alarms/audioalarm.prefab";
+        private const string SirenLightPrefab = "assets/prefabs/io/electric/lights/sirenlightorange.prefab";
         private const string DeployEffectPrefab = "assets/prefabs/npc/autoturret/effects/autoturret-deploy.prefab";
         private const string CodeLockDeniedEffectPrefab = "assets/prefabs/locks/keypad/effects/lock.code.denied.prefab";
 
@@ -49,16 +52,10 @@ namespace Oxide.Plugins
         private static readonly Vector3 SphereTransformScale = new Vector3(TurretScale, TurretScale, TurretScale);
         private static readonly Vector3 TurretTransformScale = new Vector3(1 / TurretScale, 1 / TurretScale, 1 / TurretScale);
 
-        private DynamicHookSubscriber<uint> _turretDroneTracker = new DynamicHookSubscriber<uint>(
-            nameof(OnSwitchToggle),
-            nameof(OnSwitchToggled),
-            nameof(OnTurretTarget),
-            nameof(OnEntityTakeDamage),
-            nameof(OnEntityKill),
-            nameof(OnEntityDeath),
-            nameof(CanPickupEntity),
-            nameof(canRemove)
-        );
+        private readonly object True = true;
+        private readonly object False = false;
+
+        private DynamicHookSubscriber<uint> _turretDroneTracker;
 
         #endregion
 
@@ -73,6 +70,30 @@ namespace Oxide.Plugins
             permission.RegisterPermission(PermissionDeployFree, this);
             permission.RegisterPermission(PermissionAutoDeploy, this);
 
+            var dynamicHookNames = new List<string>
+            {
+                nameof(OnSwitchToggle),
+                nameof(OnSwitchToggled),
+                nameof(OnTurretTarget),
+                nameof(OnEntityTakeDamage),
+                nameof(OnEntityKill),
+                nameof(OnEntityDeath),
+                nameof(CanPickupEntity),
+                nameof(canRemove)
+            };
+
+            if (_pluginConfig.EnableAudioAlarm || _pluginConfig.EnableSirenLight)
+            {
+                dynamicHookNames.Add(nameof(OnBookmarkControlStarted));
+                dynamicHookNames.Add(nameof(OnBookmarkControlEnded));
+            }
+            else
+            {
+                Unsubscribe(nameof(OnBookmarkControlStarted));
+                Unsubscribe(nameof(OnBookmarkControlEnded));
+            }
+
+            _turretDroneTracker = new DynamicHookSubscriber<uint>(dynamicHookNames.ToArray());
             _turretDroneTracker.UnsubscribeAll();
         }
 
@@ -90,11 +111,11 @@ namespace Oxide.Plugins
                 if (drone == null || !IsDroneEligible(drone))
                     continue;
 
-                var droneTurret = GetDroneTurret(drone);
-                if (droneTurret == null)
+                var turret = GetDroneTurret(drone);
+                if (turret == null)
                     continue;
 
-                RefreshDroneTurret(drone, droneTurret);
+                RefreshDroneTurret(drone, turret);
             }
         }
 
@@ -129,7 +150,7 @@ namespace Oxide.Plugins
             });
         }
 
-        private bool? OnSwitchToggle(ElectricSwitch electricSwitch, BasePlayer player)
+        private object OnSwitchToggle(ElectricSwitch electricSwitch, BasePlayer player)
         {
             var turret = GetParentTurret(electricSwitch);
             if (turret == null)
@@ -143,7 +164,7 @@ namespace Oxide.Plugins
             {
                 // Disallow switching the turret on and off while building blocked.
                 Effect.server.Run(CodeLockDeniedEffectPrefab, electricSwitch, 0, Vector3.zero, Vector3.forward);
-                return false;
+                return False;
             }
 
             return null;
@@ -164,26 +185,31 @@ namespace Oxide.Plugins
             else
                 turret.InitiateShutdown();
 
+            RefreshAlarmState(drone, turret);
+
             return;
         }
 
-        private bool? OnTurretTarget(AutoTurret turret, BaseCombatEntity target)
+        private object OnTurretTarget(AutoTurret turret, BaseCombatEntity target)
         {
             if (turret == null || target == null || GetParentDrone(turret) == null)
                 return null;
 
-            if (target is BaseAnimalNPC && !_pluginConfig.TargetAnimals)
-                return false;
+            if (!_pluginConfig.TargetAnimals && target is BaseAnimalNPC)
+                return False;
 
             var basePlayer = target as BasePlayer;
             if (basePlayer != null)
             {
-                if (basePlayer.IsNpc && !_pluginConfig.TargetNPCs)
-                    return false;
+                if (!_pluginConfig.TargetNPCs && basePlayer.IsNpc)
+                    return False;
+
+                if (!_pluginConfig.TargetPlayers && basePlayer.userID.IsSteamId())
+                    return False;
 
                 // Don't target human or NPC players in safe zones, unless they are hostile.
                 if (basePlayer.InSafeZone() && (basePlayer.IsNpc || !basePlayer.IsHostile()))
-                    return false;
+                    return False;
 
                 return null;
             }
@@ -192,7 +218,7 @@ namespace Oxide.Plugins
         }
 
         // Redirect damage from the turret to the drone.
-        private bool? OnEntityTakeDamage(AutoTurret turret, HitInfo info)
+        private object OnEntityTakeDamage(AutoTurret turret, HitInfo info)
         {
             var drone = GetParentDrone(turret);
             if (drone == null)
@@ -201,11 +227,11 @@ namespace Oxide.Plugins
             drone.Hurt(info);
             HitNotify(drone, info);
 
-            return true;
+            return True;
         }
 
         // Redirect damage from the turret switch to the drone.
-        private bool? OnEntityTakeDamage(ElectricSwitch electricSwitch, HitInfo info)
+        private object OnEntityTakeDamage(ElectricSwitch electricSwitch, HitInfo info)
         {
             var autoTurret = GetParentTurret(electricSwitch);
             if (autoTurret == null)
@@ -218,7 +244,7 @@ namespace Oxide.Plugins
             drone.Hurt(info);
             HitNotify(drone, info);
 
-            return true;
+            return True;
         }
 
         private void OnEntityKill(Drone drone)
@@ -264,13 +290,48 @@ namespace Oxide.Plugins
             }
         }
 
-        private bool? CanPickupEntity(BasePlayer player, Drone drone)
+        private object CanPickupEntity(BasePlayer player, Drone drone)
         {
             if (CanPickupInternal(player, drone))
                 return null;
 
             ChatMessage(player, Lang.ErrorCannotPickupWithTurret);
-            return false;
+            return False;
+        }
+
+        private void OnBookmarkControlStarted(ComputerStation station, BasePlayer player, string bookmarkName, Drone drone)
+        {
+            var turret = GetDroneTurret(drone);
+            if (turret != null)
+            {
+                // Delay in case the drone is hovering.
+                NextTick(() =>
+                {
+                    if (drone == null || turret == null)
+                        return;
+
+                    RefreshAlarmState(drone, turret);
+                });
+            }
+        }
+
+        private void OnBookmarkControlEnded(ComputerStation station, BasePlayer player, Drone drone)
+        {
+            if (drone == null)
+                return;
+
+            var turret = GetDroneTurret(drone);
+            if (turret != null)
+            {
+                // Delay in case the drone is hovering.
+                NextTick(() =>
+                {
+                    if (drone == null || turret == null)
+                        return;
+
+                    RefreshAlarmState(drone, turret);
+                });
+            }
         }
 
         // This hook is exposed by plugin: Remover Tool (RemoverTool).
@@ -477,6 +538,26 @@ namespace Oxide.Plugins
         private static AutoTurret GetDroneTurret(Drone drone) =>
             drone.GetSlot(TurretSlot) as AutoTurret;
 
+        private static T GetChildOfType<T>(BaseEntity entity, string prefabName = null) where T : BaseEntity
+        {
+            foreach (var child in entity.children)
+            {
+                var childOfType = child as T;
+                if (childOfType != null && (prefabName == null || child.PrefabName == prefabName))
+                    return childOfType;
+            }
+            return null;
+        }
+
+        private static IOEntity GetTurretAlarm(AutoTurret turret) =>
+            GetChildOfType<IOEntity>(turret, AlarmPrefab);
+
+        private static IOEntity GetTurretLight(AutoTurret turret) =>
+            GetChildOfType<IOEntity>(turret, SirenLightPrefab);
+
+        private static bool ShouldPowerAlarm(Drone drone, AutoTurret turret) =>
+            drone.IsBeingControlled && (turret.booting || turret.IsOn());
+
         private static bool CanPickupInternal(BasePlayer player, Drone drone)
         {
             if (!IsDroneEligible(drone))
@@ -539,6 +620,39 @@ namespace Oxide.Plugins
             // turret trigger collider, causing the drone to ocassionally reduce altitude like when
             // it's close to the ground.
             turret.targetTrigger.GetOrAddComponent<Rigidbody>().isKinematic = true;
+        }
+
+        private static IOEntity AttachTurretAlarm(Drone drone, AutoTurret turret)
+        {
+            var turretAlarm = GameManager.server.CreateEntity(AlarmPrefab, new Vector3(0, 0.185f, 0)) as IOEntity;
+            if (turretAlarm == null)
+                return null;
+
+            turretAlarm.pickup.enabled = false;
+            turretAlarm.SetFlag(IOEntity.Flag_HasPower, ShouldPowerAlarm(drone, turret));
+            RemoveProblemComponents(turretAlarm);
+            HideInputsAndOutputs(turretAlarm);
+
+            turretAlarm.SetParent(turret);
+            turretAlarm.Spawn();
+
+            return turretAlarm;
+        }
+
+        private static IOEntity AttachTurretLight(Drone drone, AutoTurret turret)
+        {
+            var turretLight = GameManager.server.CreateEntity(SirenLightPrefab, new Vector3(0, 0.3f, 0), Quaternion.Euler(180, 0, 0)) as IOEntity;
+            if (turretLight == null)
+                return null;
+
+            turretLight.SetFlag(IOEntity.Flag_HasPower, ShouldPowerAlarm(drone, turret));
+            RemoveProblemComponents(turretLight);
+            HideInputsAndOutputs(turretLight);
+
+            turretLight.SetParent(turret);
+            turretLight.Spawn();
+
+            return turretLight;
         }
 
         private static ElectricSwitch AttachTurretSwitch(AutoTurret autoTurret)
@@ -612,14 +726,76 @@ namespace Oxide.Plugins
         private static Item FindPlayerAutoTurretItem(BasePlayer basePlayer) =>
             basePlayer.inventory.FindItemID(AutoTurretItemId);
 
+        private void RefreshAlarmState(Drone drone, AutoTurret turret)
+        {
+            if (_pluginConfig.EnableAudioAlarm)
+            {
+                var turretAlarm = GetTurretAlarm(turret);
+                if (turretAlarm != null)
+                {
+                    turretAlarm.SetFlag(IOEntity.Flag_HasPower, ShouldPowerAlarm(drone, turret));
+                }
+            }
+
+            if (_pluginConfig.EnableSirenLight)
+            {
+                var turretLight = GetTurretLight(turret);
+                if (turretLight != null)
+                {
+                    turretLight.SetFlag(IOEntity.Flag_HasPower, ShouldPowerAlarm(drone, turret));
+                }
+            }
+        }
+
         private void SetupDroneTurret(Drone drone, AutoTurret turret, SphereEntity sphereEntity)
         {
             // Damage will be processed by the drone.
             turret.baseProtection = null;
 
+            turret.sightRange = _pluginConfig.TurretRange;
+            turret.targetTrigger.GetComponent<SphereCollider>().radius = _pluginConfig.TurretRange;
+
             RemoveProblemComponents(turret);
             HideInputsAndOutputs(turret);
             AddRigidBodyToTriggerCollider(turret);
+
+            if (_pluginConfig.EnableAudioAlarm)
+            {
+                var turretAlarm = GetTurretAlarm(turret);
+                if (turretAlarm != null)
+                {
+                    turretAlarm.SetFlag(IOEntity.Flag_HasPower, ShouldPowerAlarm(drone, turret));
+                }
+                else
+                {
+                    AttachTurretAlarm(drone, turret);
+                }
+            }
+
+            if (_pluginConfig.EnableSirenLight)
+            {
+                var turretLight = GetTurretLight(turret);
+                if (turretLight != null)
+                {
+                    turretLight.SetFlag(IOEntity.Flag_HasPower, ShouldPowerAlarm(drone, turret));
+                }
+                else
+                {
+                    AttachTurretLight(drone, turret);
+                }
+            }
+
+            if (_pluginConfig.EnableAudioAlarm || _pluginConfig.EnableSirenLight)
+            {
+                // Delay refreshing the alarm state in case the turret is being automatically powered on.
+                NextTick(() =>
+                {
+                    if (drone == null || turret == null)
+                        return;
+
+                    RefreshAlarmState(drone, turret);
+                });
+            }
 
             // Invert the localScale of the turret to compensate for the sphereEntity localScale being increased.
             // Without doing this, the range of the turret corresponds to the sphere scale.
@@ -780,11 +956,23 @@ namespace Oxide.Plugins
 
         private class Configuration : SerializableConfiguration
         {
+            [JsonProperty("TargetPlayers")]
+            public bool TargetPlayers = true;
+
             [JsonProperty("TargetNPCs")]
             public bool TargetNPCs = true;
 
             [JsonProperty("TargetAnimals")]
             public bool TargetAnimals = true;
+
+            [JsonProperty("EnableAudioAlarm")]
+            public bool EnableAudioAlarm = false;
+
+            [JsonProperty("EnableSirenLight")]
+            public bool EnableSirenLight = false;
+
+            [JsonProperty("TurretRange")]
+            public float TurretRange = 30f;
 
             [JsonProperty("TipChance")]
             public int TipChance = 25;
