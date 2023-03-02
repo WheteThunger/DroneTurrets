@@ -6,7 +6,11 @@
 
 - Allows players with permission to deploy auto turrets onto RC drones
 - Allows players with a separate permission to deploy NPC auto turrets
-- Redirects damge from the turret to the drone
+- Redirects damage from the turret to the drone
+
+## Known issues
+
+Since the March 2023 Rust update, drones now sway in the wind, but attached entities do not sway. This causes undesirable visuals to players observing a drone that is being controlled. There is no known fix at this time.
 
 ## Permissions
 
