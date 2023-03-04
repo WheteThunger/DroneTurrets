@@ -19,10 +19,9 @@ namespace Oxide.Plugins
         #region Fields
 
         [PluginReference]
-        Plugin DroneSettings, EntityScaleManager;
+        private readonly Plugin DroneSettings, EntityScaleManager;
 
-        private static DroneTurrets _pluginInstance;
-        private static Configuration _pluginConfig;
+        private Configuration _config;
 
         private const float TurretScale = 0.6f;
 
@@ -63,8 +62,6 @@ namespace Oxide.Plugins
 
         private void Init()
         {
-            _pluginInstance = this;
-
             permission.RegisterPermission(PermissionDeploy, this);
             permission.RegisterPermission(PermissionDeployNpc, this);
             permission.RegisterPermission(PermissionDeployFree, this);
@@ -82,7 +79,7 @@ namespace Oxide.Plugins
                 nameof(canRemove)
             };
 
-            if (_pluginConfig.EnableAudioAlarm || _pluginConfig.EnableSirenLight)
+            if (_config.EnableAudioAlarm || _config.EnableSirenLight)
             {
                 dynamicHookNames.Add(nameof(OnBookmarkControlStarted));
                 dynamicHookNames.Add(nameof(OnBookmarkControlEnded));
@@ -93,14 +90,8 @@ namespace Oxide.Plugins
                 Unsubscribe(nameof(OnBookmarkControlEnded));
             }
 
-            _turretDroneTracker = new DynamicHookSubscriber<uint>(dynamicHookNames.ToArray());
+            _turretDroneTracker = new DynamicHookSubscriber<uint>(this, dynamicHookNames.ToArray());
             _turretDroneTracker.UnsubscribeAll();
-        }
-
-        private void Unload()
-        {
-            _pluginInstance = null;
-            _pluginConfig = null;
         }
 
         private void OnServerInitialized()
@@ -132,18 +123,20 @@ namespace Oxide.Plugins
             if (player == null)
                 return;
 
+            var drone2 = drone;
+
             NextTick(() =>
             {
                 // Delay this check to allow time for other plugins to deploy an entity to this slot.
-                if (drone == null || player == null || drone.GetSlot(TurretSlot) != null)
+                if (drone2 == null || player == null || drone2.GetSlot(TurretSlot) != null)
                     return;
 
                 if (permission.UserHasPermission(player.UserIDString, PermissionAutoDeploy))
                 {
-                    DeployAutoTurret(drone, player, 1);
+                    DeployAutoTurret(drone2, player, 1);
                 }
                 else if (permission.UserHasPermission(player.UserIDString, PermissionDeploy)
-                    && UnityEngine.Random.Range(0, 100) < _pluginConfig.TipChance)
+                    && UnityEngine.Random.Range(0, 100) < _config.TipChance)
                 {
                     ChatMessage(player, Lang.TipDeployCommand);
                 }
@@ -181,13 +174,15 @@ namespace Oxide.Plugins
                 return;
 
             if (electricSwitch.IsOn())
+            {
                 turret.InitiateStartup();
+            }
             else
+            {
                 turret.InitiateShutdown();
+            }
 
             RefreshAlarmState(drone, turret);
-
-            return;
         }
 
         private object OnTurretTarget(AutoTurret turret, BaseCombatEntity target)
@@ -195,16 +190,16 @@ namespace Oxide.Plugins
             if (turret == null || target == null || GetParentDrone(turret) == null)
                 return null;
 
-            if (!_pluginConfig.TargetAnimals && target is BaseAnimalNPC)
+            if (!_config.TargetAnimals && target is BaseAnimalNPC)
                 return False;
 
             var basePlayer = target as BasePlayer;
             if (basePlayer != null)
             {
-                if (!_pluginConfig.TargetNPCs && basePlayer.IsNpc)
+                if (!_config.TargetNPCs && basePlayer.IsNpc)
                     return False;
 
-                if (!_pluginConfig.TargetPlayers && basePlayer.userID.IsSteamId())
+                if (!_config.TargetPlayers && basePlayer.userID.IsSteamId())
                     return False;
 
                 // Don't target human or NPC players in safe zones, unless they are hostile.
@@ -262,15 +257,20 @@ namespace Oxide.Plugins
             if (drone == null)
                 return;
 
+            var parentSphere2 = parentSphere;
             parentSphere.Invoke(() =>
             {
                 // EntityScaleManager may have already destroyed the sphere in the same frame.
-                if (!parentSphere.IsDestroyed)
-                    parentSphere.Kill();
+                if (!parentSphere2.IsDestroyed)
+                {
+                    parentSphere2.Kill();
+                }
             }, 0);
 
             _turretDroneTracker.Remove(drone.net.ID);
-            drone.Invoke(() => RefreshDroneSettingsProfile(drone), 0);
+
+            var drone2 = drone;
+            drone.Invoke(() => RefreshDroneSettingsProfile(drone2), 0);
         }
 
         private void OnEntityDeath(Drone drone)
@@ -304,13 +304,16 @@ namespace Oxide.Plugins
             var turret = GetDroneTurret(drone);
             if (turret != null)
             {
+                var drone2 = drone;
+                var turret2 = turret;
+
                 // Delay in case the drone is hovering.
                 NextTick(() =>
                 {
-                    if (drone == null || turret == null)
+                    if (drone2 == null || turret2 == null)
                         return;
 
-                    RefreshAlarmState(drone, turret);
+                    RefreshAlarmState(drone2, turret2);
                 });
             }
         }
@@ -323,13 +326,16 @@ namespace Oxide.Plugins
             var turret = GetDroneTurret(drone);
             if (turret != null)
             {
+                var drone2 = drone;
+                var turret2 = turret;
+
                 // Delay in case the drone is hovering.
                 NextTick(() =>
                 {
-                    if (drone == null || turret == null)
+                    if (drone2 == null || turret2 == null)
                         return;
 
-                    RefreshAlarmState(drone, turret);
+                    RefreshAlarmState(drone2, turret2);
                 });
             }
         }
@@ -419,7 +425,9 @@ namespace Oxide.Plugins
             }
 
             if (autoTurretPaymentItem != null)
+            {
                 UseItem(basePlayer, autoTurretPaymentItem);
+            }
         }
 
         [Command("dronenpcturret")]
@@ -442,7 +450,9 @@ namespace Oxide.Plugins
                 return;
 
             if (DeployNpcAutoTurret(drone, basePlayer) == null)
+            {
                 ReplyToPlayer(player, Lang.ErrorDeployFailed);
+            }
         }
 
         #endregion
@@ -503,13 +513,13 @@ namespace Oxide.Plugins
 
         private static bool DeployTurretWasBlocked(Drone drone, BasePlayer deployer)
         {
-            object hookResult = Interface.CallHook("OnDroneTurretDeploy", drone, deployer);
+            var hookResult = Interface.CallHook("OnDroneTurretDeploy", drone, deployer);
             return hookResult is bool && (bool)hookResult == false;
         }
 
         private static bool DeployNpcTurretWasBlocked(Drone drone, BasePlayer deployer = null)
         {
-            object hookResult = Interface.CallHook("OnDroneNpcTurretDeploy", drone, deployer);
+            var hookResult = Interface.CallHook("OnDroneNpcTurretDeploy", drone, deployer);
             return hookResult is bool && (bool)hookResult == false;
         }
 
@@ -518,8 +528,10 @@ namespace Oxide.Plugins
             DroneSettings?.Call("API_RefreshDroneProfile", drone);
         }
 
-        private static bool IsDroneEligible(Drone drone) =>
-            !(drone is DeliveryDrone);
+        private static bool IsDroneEligible(Drone drone)
+        {
+            return !(drone is DeliveryDrone);
+        }
 
         private static Drone GetParentDrone(BaseEntity entity, out SphereEntity parentSphere)
         {
@@ -535,8 +547,10 @@ namespace Oxide.Plugins
             return GetParentDrone(entity, out parentSphere);
         }
 
-        private static AutoTurret GetDroneTurret(Drone drone) =>
-            drone.GetSlot(TurretSlot) as AutoTurret;
+        private static AutoTurret GetDroneTurret(Drone drone)
+        {
+            return drone.GetSlot(TurretSlot) as AutoTurret;
+        }
 
         private static T GetChildOfType<T>(BaseEntity entity, string prefabName = null) where T : BaseEntity
         {
@@ -546,17 +560,24 @@ namespace Oxide.Plugins
                 if (childOfType != null && (prefabName == null || child.PrefabName == prefabName))
                     return childOfType;
             }
+
             return null;
         }
 
-        private static IOEntity GetTurretAlarm(AutoTurret turret) =>
-            GetChildOfType<IOEntity>(turret, AlarmPrefab);
+        private static IOEntity GetTurretAlarm(AutoTurret turret)
+        {
+            return GetChildOfType<IOEntity>(turret, AlarmPrefab);
+        }
 
-        private static IOEntity GetTurretLight(AutoTurret turret) =>
-            GetChildOfType<IOEntity>(turret, SirenLightPrefab);
+        private static IOEntity GetTurretLight(AutoTurret turret)
+        {
+            return GetChildOfType<IOEntity>(turret, SirenLightPrefab);
+        }
 
-        private static bool ShouldPowerAlarm(Drone drone, AutoTurret turret) =>
-            drone.IsBeingControlled && (turret.booting || turret.IsOn());
+        private static bool ShouldPowerAlarm(Drone drone, AutoTurret turret)
+        {
+            return drone.IsBeingControlled && (turret.booting || turret.IsOn());
+        }
 
         private static bool CanPickupInternal(BasePlayer player, Drone drone)
         {
@@ -586,7 +607,7 @@ namespace Oxide.Plugins
 
         private static SphereEntity SpawnSphereEntity(Drone drone)
         {
-            SphereEntity sphereEntity = GameManager.server.CreateEntity(SpherePrefab, SphereEntityLocalPosition) as SphereEntity;
+            var sphereEntity = GameManager.server.CreateEntity(SpherePrefab, SphereEntityLocalPosition) as SphereEntity;
             if (sphereEntity == null)
                 return null;
 
@@ -599,15 +620,14 @@ namespace Oxide.Plugins
             return sphereEntity;
         }
 
-        private static void RegisterWithEntityScaleManager(BaseEntity entity) =>
-            _pluginInstance.EntityScaleManager?.Call("API_RegisterScaledEntity", entity);
-
         private static void RemoveProblemComponents(BaseEntity entity)
         {
             foreach (var collider in entity.GetComponentsInChildren<Collider>())
             {
                 if (!collider.isTrigger)
+                {
                     UnityEngine.Object.DestroyImmediate(collider);
+                }
             }
 
             UnityEngine.Object.DestroyImmediate(entity.GetComponent<DestroyOnGroundMissing>());
@@ -657,7 +677,9 @@ namespace Oxide.Plugins
 
         private static ElectricSwitch AttachTurretSwitch(AutoTurret autoTurret)
         {
-            var electricSwitch = GameManager.server.CreateEntity(ElectricSwitchPrefab, autoTurret.transform.TransformPoint(TurretSwitchLocalPosition), autoTurret.transform.rotation * TurretSwitchLocalRotation) as ElectricSwitch;
+            var position = autoTurret.transform.TransformPoint(TurretSwitchLocalPosition);
+            var rotation = autoTurret.transform.rotation * TurretSwitchLocalRotation;
+            var electricSwitch = GameManager.server.CreateEntity(ElectricSwitchPrefab, position, rotation) as ElectricSwitch;
             if (electricSwitch == null)
                 return null;
 
@@ -672,10 +694,14 @@ namespace Oxide.Plugins
         {
             // Hide the inputs and outputs on the client.
             foreach (var input in ioEntity.inputs)
+            {
                 input.type = IOEntity.IOType.Generic;
+            }
 
             foreach (var output in ioEntity.outputs)
+            {
                 output.type = IOEntity.IOType.Generic;
+            }
         }
 
         private static void SetupTurretSwitch(ElectricSwitch electricSwitch)
@@ -708,11 +734,15 @@ namespace Oxide.Plugins
                 : null;
         }
 
-        private static AutoTurret GetParentTurret(BaseEntity entity) =>
-            entity.GetParentEntity() as AutoTurret;
+        private static AutoTurret GetParentTurret(BaseEntity entity)
+        {
+            return entity.GetParentEntity() as AutoTurret;
+        }
 
-        private static void RunOnEntityBuilt(Item turretItem, AutoTurret autoTurret) =>
+        private static void RunOnEntityBuilt(Item turretItem, AutoTurret autoTurret)
+        {
             Interface.CallHook("OnEntityBuilt", turretItem.GetHeldEntity(), autoTurret.gameObject);
+        }
 
         private static void UseItem(BasePlayer basePlayer, Item item, int amountToConsume = 1)
         {
@@ -720,15 +750,24 @@ namespace Oxide.Plugins
             basePlayer.Command("note.inv", item.info.itemid, -amountToConsume);
         }
 
-        private static float GetItemConditionFraction(Item item) =>
-            item.hasCondition ? item.condition / item.info.condition.max : 1.0f;
+        private static float GetItemConditionFraction(Item item)
+        {
+            return item.hasCondition ? item.condition / item.info.condition.max : 1.0f;
+        }
 
-        private static Item FindPlayerAutoTurretItem(BasePlayer basePlayer) =>
-            basePlayer.inventory.FindItemID(AutoTurretItemId);
+        private static Item FindPlayerAutoTurretItem(BasePlayer basePlayer)
+        {
+            return basePlayer.inventory.FindItemID(AutoTurretItemId);
+        }
+
+        private void RegisterWithEntityScaleManager(BaseEntity entity)
+        {
+            EntityScaleManager?.Call("API_RegisterScaledEntity", entity);
+        }
 
         private void RefreshAlarmState(Drone drone, AutoTurret turret)
         {
-            if (_pluginConfig.EnableAudioAlarm)
+            if (_config.EnableAudioAlarm)
             {
                 var turretAlarm = GetTurretAlarm(turret);
                 if (turretAlarm != null)
@@ -737,7 +776,7 @@ namespace Oxide.Plugins
                 }
             }
 
-            if (_pluginConfig.EnableSirenLight)
+            if (_config.EnableSirenLight)
             {
                 var turretLight = GetTurretLight(turret);
                 if (turretLight != null)
@@ -752,14 +791,14 @@ namespace Oxide.Plugins
             // Damage will be processed by the drone.
             turret.baseProtection = null;
 
-            turret.sightRange = _pluginConfig.TurretRange;
-            turret.targetTrigger.GetComponent<SphereCollider>().radius = _pluginConfig.TurretRange;
+            turret.sightRange = _config.TurretRange;
+            turret.targetTrigger.GetComponent<SphereCollider>().radius = _config.TurretRange;
 
             RemoveProblemComponents(turret);
             HideInputsAndOutputs(turret);
             AddRigidBodyToTriggerCollider(turret);
 
-            if (_pluginConfig.EnableAudioAlarm)
+            if (_config.EnableAudioAlarm)
             {
                 var turretAlarm = GetTurretAlarm(turret);
                 if (turretAlarm != null)
@@ -772,7 +811,7 @@ namespace Oxide.Plugins
                 }
             }
 
-            if (_pluginConfig.EnableSirenLight)
+            if (_config.EnableSirenLight)
             {
                 var turretLight = GetTurretLight(turret);
                 if (turretLight != null)
@@ -785,7 +824,7 @@ namespace Oxide.Plugins
                 }
             }
 
-            if (_pluginConfig.EnableAudioAlarm || _pluginConfig.EnableSirenLight)
+            if (_config.EnableAudioAlarm || _config.EnableSirenLight)
             {
                 // Delay refreshing the alarm state in case the turret is being automatically powered on.
                 NextTick(() =>
@@ -819,12 +858,14 @@ namespace Oxide.Plugins
 
             var electricSwitch = turret.GetComponentInChildren<ElectricSwitch>();
             if (electricSwitch != null)
+            {
                 SetupTurretSwitch(electricSwitch);
+            }
         }
 
         private NPCAutoTurret DeployNpcAutoTurret(Drone drone, BasePlayer deployer)
         {
-            SphereEntity sphereEntity = SpawnSphereEntity(drone);
+            var sphereEntity = SpawnSphereEntity(drone);
             if (sphereEntity == null)
                 return null;
 
@@ -849,7 +890,7 @@ namespace Oxide.Plugins
 
         private AutoTurret DeployAutoTurret(Drone drone, BasePlayer basePlayer, float conditionFraction = 1)
         {
-            SphereEntity sphereEntity = SpawnSphereEntity(drone);
+            var sphereEntity = SpawnSphereEntity(drone);
             if (sphereEntity == null)
                 return null;
 
@@ -861,7 +902,9 @@ namespace Oxide.Plugins
             }
 
             if (basePlayer != null)
+            {
                 turret.OwnerID = basePlayer.userID;
+            }
 
             turret.SetFlag(IOEntity.Flag_HasPower, true);
             turret.SetParent(sphereEntity);
@@ -917,36 +960,46 @@ namespace Oxide.Plugins
 
         private class DynamicHookSubscriber<T>
         {
+            private DroneTurrets _plugin;
             private HashSet<T> _list = new HashSet<T>();
             private string[] _hookNames;
 
-            public DynamicHookSubscriber(params string[] hookNames)
+            public DynamicHookSubscriber(DroneTurrets plugin, params string[] hookNames)
             {
+                _plugin = plugin;
                 _hookNames = hookNames;
             }
 
             public void Add(T item)
             {
                 if (_list.Add(item) && _list.Count == 1)
+                {
                     SubscribeAll();
+                }
             }
 
             public void Remove(T item)
             {
                 if (_list.Remove(item) && _list.Count == 0)
+                {
                     UnsubscribeAll();
+                }
             }
 
             public void SubscribeAll()
             {
                 foreach (var hookName in _hookNames)
-                    _pluginInstance.Subscribe(hookName);
+                {
+                    _plugin.Subscribe(hookName);
+                }
             }
 
             public void UnsubscribeAll()
             {
                 foreach (var hookName in _hookNames)
-                    _pluginInstance.Unsubscribe(hookName);
+                {
+                    _plugin.Unsubscribe(hookName);
+                }
             }
         }
 
@@ -954,7 +1007,7 @@ namespace Oxide.Plugins
 
         #region Configuration
 
-        private class Configuration : SerializableConfiguration
+        private class Configuration : BaseConfiguration
         {
             [JsonProperty("TargetPlayers")]
             public bool TargetPlayers = true;
@@ -982,9 +1035,9 @@ namespace Oxide.Plugins
 
         #endregion
 
-        #region Configuration Boilerplate
+        #region Configuration Helpers
 
-        private class SerializableConfiguration
+        private class BaseConfiguration
         {
             public string ToJson() => JsonConvert.SerializeObject(this);
 
@@ -1013,7 +1066,7 @@ namespace Oxide.Plugins
             }
         }
 
-        private bool MaybeUpdateConfig(SerializableConfiguration config)
+        private bool MaybeUpdateConfig(BaseConfiguration config)
         {
             var currentWithDefaults = config.ToDictionary();
             var currentRaw = Config.ToDictionary(x => x.Key, x => x.Value);
@@ -1022,7 +1075,7 @@ namespace Oxide.Plugins
 
         private bool MaybeUpdateConfigDict(Dictionary<string, object> currentWithDefaults, Dictionary<string, object> currentRaw)
         {
-            bool changed = false;
+            var changed = false;
 
             foreach (var key in currentWithDefaults.Keys)
             {
@@ -1053,20 +1106,20 @@ namespace Oxide.Plugins
             return changed;
         }
 
-        protected override void LoadDefaultConfig() => _pluginConfig = GetDefaultConfig();
+        protected override void LoadDefaultConfig() => _config = GetDefaultConfig();
 
         protected override void LoadConfig()
         {
             base.LoadConfig();
             try
             {
-                _pluginConfig = Config.ReadObject<Configuration>();
-                if (_pluginConfig == null)
+                _config = Config.ReadObject<Configuration>();
+                if (_config == null)
                 {
                     throw new JsonException();
                 }
 
-                if (MaybeUpdateConfig(_pluginConfig))
+                if (MaybeUpdateConfig(_config))
                 {
                     LogWarning("Configuration appears to be outdated; updating and saving");
                     SaveConfig();
@@ -1083,7 +1136,7 @@ namespace Oxide.Plugins
         protected override void SaveConfig()
         {
             Log($"Configuration changes saved to {Name}.json");
-            Config.WriteObject(_pluginConfig, true);
+            Config.WriteObject(_config, true);
         }
 
         #endregion
