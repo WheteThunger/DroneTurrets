@@ -1,18 +1,18 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Newtonsoft.Json.Serialization;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using UnityEngine;
 using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Drone Turrets", "WhiteThunder", "1.2.0")]
+    [Info("Drone Turrets", "WhiteThunder", "1.3.0")]
     [Description("Allows players to deploy auto turrets to RC drones.")]
     internal class DroneTurrets : CovalencePlugin
     {
@@ -29,6 +29,7 @@ namespace Oxide.Plugins
         private const string PermissionDeployNpc = "droneturrets.deploynpc";
         private const string PermissionDeployFree = "droneturrets.deploy.free";
         private const string PermissionAutoDeploy = "droneturrets.autodeploy";
+        private const string PermissionControl = "droneturrets.control";
 
         private const string SpherePrefab = "assets/prefabs/visualization/sphere.prefab";
         private const string AutoTurretPrefab = "assets/prefabs/npc/autoturret/autoturret_deployed.prefab";
@@ -51,6 +52,8 @@ namespace Oxide.Plugins
         private static readonly Vector3 SphereTransformScale = new Vector3(TurretScale, TurretScale, TurretScale);
         private static readonly Vector3 TurretTransformScale = new Vector3(1 / TurretScale, 1 / TurretScale, 1 / TurretScale);
 
+        private static FieldInfo StationCurrentPlayerIdField = typeof(ComputerStation).GetField("currentPlayerID", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
         private readonly object True = true;
         private readonly object False = false;
 
@@ -66,9 +69,11 @@ namespace Oxide.Plugins
             permission.RegisterPermission(PermissionDeployNpc, this);
             permission.RegisterPermission(PermissionDeployFree, this);
             permission.RegisterPermission(PermissionAutoDeploy, this);
+            permission.RegisterPermission(PermissionControl, this);
 
             var dynamicHookNames = new List<string>
             {
+                nameof(OnServerCommand),
                 nameof(OnSwitchToggle),
                 nameof(OnSwitchToggled),
                 nameof(OnTurretTarget),
@@ -76,19 +81,10 @@ namespace Oxide.Plugins
                 nameof(OnEntityKill),
                 nameof(OnEntityDeath),
                 nameof(CanPickupEntity),
-                nameof(canRemove)
+                nameof(OnBookmarkControlStarted),
+                nameof(OnBookmarkControlEnded),
+                nameof(canRemove),
             };
-
-            if (_config.EnableAudioAlarm || _config.EnableSirenLight)
-            {
-                dynamicHookNames.Add(nameof(OnBookmarkControlStarted));
-                dynamicHookNames.Add(nameof(OnBookmarkControlEnded));
-            }
-            else
-            {
-                Unsubscribe(nameof(OnBookmarkControlStarted));
-                Unsubscribe(nameof(OnBookmarkControlEnded));
-            }
 
             _turretDroneTracker = new DynamicHookSubscriber<uint>(this, dynamicHookNames.ToArray());
             _turretDroneTracker.UnsubscribeAll();
@@ -99,7 +95,7 @@ namespace Oxide.Plugins
             foreach (var entity in BaseNetworkable.serverEntities)
             {
                 var drone = entity as Drone;
-                if (drone == null || !IsDroneEligible(drone))
+                if (drone == null || !RCUtils.IsRCDrone(drone))
                     continue;
 
                 var turret = GetDroneTurret(drone);
@@ -108,6 +104,42 @@ namespace Oxide.Plugins
 
                 RefreshDroneTurret(drone, turret);
             }
+
+            foreach (var player in BasePlayer.activePlayerList)
+            {
+                ComputerStation station;
+                var turret = RCUtils.GetControlledEntity<AutoTurret>(player, out station);
+                if (turret == null)
+                    continue;
+
+                OnBookmarkControlStarted(station, player, turret.GetIdentifier(), turret);
+            }
+        }
+
+        private void Unload()
+        {
+            DroneController.DestroyAll();
+        }
+
+        private object OnServerCommand(ConsoleSystem.Arg arg)
+        {
+            if (arg.Connection == null)
+                return null;
+
+            var player = arg.Player();
+            if (player == null)
+                return null;
+
+            if (arg.cmd.FullName == "vehicle.swapseats")
+            {
+                HandleSwapSeats(player);
+                return null;
+            }
+
+            if (arg.cmd.FullName == "inventory.lighttoggle")
+                return HandleLightToggle(player);
+
+            return null;
         }
 
         private void OnEntityBuilt(Planner planner, GameObject go)
@@ -275,7 +307,7 @@ namespace Oxide.Plugins
 
         private void OnEntityDeath(Drone drone)
         {
-            if (!IsDroneEligible(drone))
+            if (!RCUtils.IsRCDrone(drone))
                 return;
 
             var turret = GetDroneTurret(drone);
@@ -302,19 +334,37 @@ namespace Oxide.Plugins
         private void OnBookmarkControlStarted(ComputerStation station, BasePlayer player, string bookmarkName, Drone drone)
         {
             var turret = GetDroneTurret(drone);
-            if (turret != null)
+            if (turret == null)
+                return;
+
+            RefreshAlarmState(drone, turret);
+        }
+
+        private void OnBookmarkControlStarted(ComputerStation station, BasePlayer player, string bookmarkName, AutoTurret turret)
+        {
+            var drone = GetParentDrone(turret);
+            if (drone == null)
+                return;
+
+            if (!RCUtils.HasController(turret, player))
+                return;
+
+            if (!HasPermissionToControl(player))
             {
-                var drone2 = drone;
-                var turret2 = turret;
+                RCUtils.RemoveController(turret);
+                RCUtils.AddFakeViewer(turret);
+                RCUtils.AddViewer(turret, player);
+                RCUtils.RemoveController(turret);
+                station.SetFlag(ComputerStation.Flag_HasFullControl, false);
+                return;
+            }
 
-                // Delay in case the drone is hovering.
-                NextTick(() =>
-                {
-                    if (drone2 == null || turret2 == null)
-                        return;
-
-                    RefreshAlarmState(drone2, turret2);
-                });
+            if (RCUtils.CanControl(player, drone))
+            {
+                RCUtils.RemoveController(drone);
+                RCUtils.AddViewer(drone, player);
+                DroneController.AddToDrone(drone, turret, player);
+                ExposedHooks.OnBookmarkControlStarted(station, player, drone.GetIdentifier(), drone);
             }
         }
 
@@ -338,6 +388,24 @@ namespace Oxide.Plugins
                     RefreshAlarmState(drone2, turret2);
                 });
             }
+        }
+
+        private void OnBookmarkControlEnded(ComputerStation station, BasePlayer player, AutoTurret turret)
+        {
+            if (turret == null)
+                return;
+
+            var drone = GetParentDrone(turret);
+            if (drone == null)
+                return;
+
+            if (!RCUtils.HasController(drone, player))
+                return;
+
+            RCUtils.RemoveController(drone);
+
+            // Notify other plugins such as Drone Hover, Limited Drone Range and Limited Drone Height.
+            ExposedHooks.OnBookmarkControlEnded(station, player, drone);
         }
 
         // This hook is exposed by plugin: Remover Tool (RemoverTool).
@@ -377,6 +445,51 @@ namespace Oxide.Plugins
                 return null;
 
             return DeployNpcAutoTurret(drone, player);
+        }
+
+        #endregion
+
+        #region Exposed Hooks
+
+        private static class ExposedHooks
+        {
+            // Oxide hook.
+            public static void OnBookmarkControlStarted(ComputerStation station, BasePlayer player, string name, IRemoteControllable controllable)
+            {
+                Interface.CallHook("OnBookmarkControlStarted", station, player, name, controllable);
+            }
+
+            // Oxide hook.
+            public static void OnBookmarkControlEnded(ComputerStation station, BasePlayer player, IRemoteControllable controllable)
+            {
+                Interface.CallHook("OnBookmarkControlEnded", station, player, controllable);
+            }
+
+            // Oxide hook.
+            public static void OnEntityBuilt(BaseEntity heldEntity, GameObject gameObject)
+            {
+                Interface.CallHook("OnEntityBuilt", heldEntity, gameObject);
+            }
+
+            public static object OnDroneTurretDeploy(Drone drone, BasePlayer deployer)
+            {
+                return Interface.CallHook("OnDroneTurretDeploy", drone, deployer);
+            }
+
+            public static void OnDroneTurretDeployed(Drone drone, AutoTurret turret, BasePlayer deployer)
+            {
+                Interface.CallHook("OnDroneTurretDeployed", drone, turret, deployer);
+            }
+
+            public static object OnDroneNpcTurretDeploy(Drone drone, BasePlayer deployer)
+            {
+                return Interface.CallHook("OnDroneNpcTurretDeploy", drone, deployer);
+            }
+
+            public static void OnDroneNpcTurretDeployed(Drone drone, NPCAutoTurret turret, BasePlayer deployer)
+            {
+                Interface.CallHook("OnDroneNpcTurretDeployed", drone, turret, deployer);
+            }
         }
 
         #endregion
@@ -472,7 +585,7 @@ namespace Oxide.Plugins
         {
             var basePlayer = player.Object as BasePlayer;
             drone = GetLookEntity(basePlayer, 3) as Drone;
-            if (drone != null && IsDroneEligible(drone))
+            if (drone != null && RCUtils.IsRCDrone(drone))
                 return true;
 
             ReplyToPlayer(player, Lang.ErrorNoDroneFound);
@@ -509,28 +622,90 @@ namespace Oxide.Plugins
 
         #endregion
 
-        #region Helper Methods
+        #region Helpers
+
+        private static class RCUtils
+        {
+            public static bool IsRCDrone(Drone drone)
+            {
+                return !(drone is DeliveryDrone);
+            }
+
+            public static bool HasController(IRemoteControllable controllable)
+            {
+                return controllable.ControllingViewerId.HasValue;
+            }
+
+            public static bool HasController(IRemoteControllable controllable, BasePlayer player)
+            {
+                return controllable.ControllingViewerId?.SteamId == player.userID;
+            }
+
+            public static bool HasFakeController(IRemoteControllable controllable)
+            {
+                return controllable.ControllingViewerId?.SteamId == 0;
+            }
+
+            public static bool HasRealController(IRemoteControllable controllable)
+            {
+                return controllable.ControllingViewerId.GetValueOrDefault().SteamId != 0;
+            }
+
+            public static bool CanControl(BasePlayer player, IRemoteControllable controllable)
+            {
+                return !HasRealController(controllable) || HasController(controllable, player);
+            }
+
+            public static void RemoveController(IRemoteControllable controllable)
+            {
+                var controllerId = controllable.ControllingViewerId;
+                if (controllerId.HasValue)
+                {
+                    controllable.StopControl(controllerId.Value);
+                }
+            }
+
+            public static bool AddViewer(IRemoteControllable controllable, BasePlayer player)
+            {
+                return controllable.InitializeControl(new CameraViewerId(player.userID, 0));
+            }
+
+            public static void RemoveViewer(IRemoteControllable controllable, BasePlayer player)
+            {
+                controllable.StopControl(new CameraViewerId(player.userID, 0));
+            }
+
+            public static bool AddFakeViewer(IRemoteControllable controllable)
+            {
+                return controllable.InitializeControl(new CameraViewerId());
+            }
+
+            public static T GetControlledEntity<T>(BasePlayer player, out ComputerStation station) where T : class
+            {
+                station = player.GetMounted() as ComputerStation;
+                if ((object)station == null)
+                    return null;
+
+                return station.currentlyControllingEnt.Get(serverside: true) as T;
+            }
+
+            public static T GetControlledEntity<T>(BasePlayer player) where T : class
+            {
+                ComputerStation station;
+                return GetControlledEntity<T>(player, out station);
+            }
+        }
 
         private static bool DeployTurretWasBlocked(Drone drone, BasePlayer deployer)
         {
-            var hookResult = Interface.CallHook("OnDroneTurretDeploy", drone, deployer);
+            var hookResult = ExposedHooks.OnDroneTurretDeploy(drone, deployer);
             return hookResult is bool && (bool)hookResult == false;
         }
 
         private static bool DeployNpcTurretWasBlocked(Drone drone, BasePlayer deployer = null)
         {
-            var hookResult = Interface.CallHook("OnDroneNpcTurretDeploy", drone, deployer);
+            var hookResult = ExposedHooks.OnDroneNpcTurretDeploy(drone, deployer);
             return hookResult is bool && (bool)hookResult == false;
-        }
-
-        private void RefreshDroneSettingsProfile(Drone drone)
-        {
-            DroneSettings?.Call("API_RefreshDroneProfile", drone);
-        }
-
-        private static bool IsDroneEligible(Drone drone)
-        {
-            return !(drone is DeliveryDrone);
         }
 
         private static Drone GetParentDrone(BaseEntity entity, out SphereEntity parentSphere)
@@ -581,7 +756,7 @@ namespace Oxide.Plugins
 
         private static bool CanPickupInternal(BasePlayer player, Drone drone)
         {
-            if (!IsDroneEligible(drone))
+            if (!RCUtils.IsRCDrone(drone))
                 return true;
 
             var turret = GetDroneTurret(drone);
@@ -741,7 +916,7 @@ namespace Oxide.Plugins
 
         private static void RunOnEntityBuilt(Item turretItem, AutoTurret autoTurret)
         {
-            Interface.CallHook("OnEntityBuilt", turretItem.GetHeldEntity(), autoTurret.gameObject);
+            ExposedHooks.OnEntityBuilt(turretItem.GetHeldEntity(), autoTurret.gameObject);
         }
 
         private static void UseItem(BasePlayer basePlayer, Item item, int amountToConsume = 1)
@@ -758,6 +933,67 @@ namespace Oxide.Plugins
         private static Item FindPlayerAutoTurretItem(BasePlayer basePlayer)
         {
             return basePlayer.inventory.FindItemID(AutoTurretItemId);
+        }
+
+        private void RefreshDroneSettingsProfile(Drone drone)
+        {
+            DroneSettings?.Call("API_RefreshDroneProfile", drone);
+        }
+
+        private void SwitchControl(BasePlayer player, ComputerStation station, IRemoteControllable previous, IRemoteControllable next)
+        {
+            var nextEnt = next.GetEnt();
+            if (nextEnt == null)
+                return;
+
+            station.StopControl(player);
+            station.SendNetworkUpdateImmediate();
+
+            var forcedDroneHover = false;
+            var drone = previous as Drone ?? next as Drone;
+
+            // Check for a controller, in case Drone Hover has already added a fake one.
+            if ((object)drone != null && !RCUtils.HasController(drone))
+            {
+                RCUtils.AddFakeViewer(drone);
+                forcedDroneHover = true;
+            }
+
+            NextTick(() =>
+            {
+                if (player == null || player.IsDestroyed
+                    || station == null || station.IsDestroyed
+                    || ((previous as BaseEntity)?.IsDestroyed ?? false)
+                    || ((next as BaseEntity)?.IsDestroyed ?? false)
+                    || station.currentlyControllingEnt.IsValid(serverside: true))
+                {
+                    if (forcedDroneHover && RCUtils.HasFakeController(drone))
+                    {
+                        RCUtils.RemoveController(drone);
+                    }
+
+                    return;
+                }
+
+                RCUtils.RemoveController(next);
+
+                station.currentlyControllingEnt.uid = nextEnt.net.ID;
+                StationCurrentPlayerIdField.SetValue(station, player.userID);
+                var isControlling = RCUtils.AddViewer(next, player);
+                station.SetFlag(ComputerStation.Flag_HasFullControl, isControlling, networkupdate: false);
+                station.SendNetworkUpdateImmediate();
+                // station.SendControlBookmarks(player);
+                station.InvokeRepeating(station.ControlCheck, 0f, 0f);
+                ExposedHooks.OnBookmarkControlStarted(station, player, next.GetIdentifier(), next);
+            });
+        }
+
+        private bool HasPermissionToControl(BasePlayer player)
+        {
+            if (!_config.RequirePermission)
+                return true;
+
+            return permission.UserHasPermission(player.UserIDString, PermissionControl);
         }
 
         private void RegisterWithEntityScaleManager(BaseEntity entity)
@@ -883,7 +1119,7 @@ namespace Oxide.Plugins
             SetupDroneTurret(drone, turret, sphereEntity);
 
             Effect.server.Run(DeployEffectPrefab, turret.transform.position);
-            Interface.CallHook("OnDroneNpcTurretDeployed", drone, turret, deployer);
+            ExposedHooks.OnDroneNpcTurretDeployed(drone, turret, deployer);
 
             return turret;
         }
@@ -916,7 +1152,7 @@ namespace Oxide.Plugins
             SetupDroneTurret(drone, turret, sphereEntity);
 
             Effect.server.Run(DeployEffectPrefab, turret.transform.position);
-            Interface.CallHook("OnDroneTurretDeployed", drone, turret, basePlayer);
+            ExposedHooks.OnDroneTurretDeployed(drone, turret, basePlayer);
 
             if (basePlayer == null)
                 return turret;
@@ -952,6 +1188,54 @@ namespace Oxide.Plugins
             }
 
             return turret;
+        }
+
+        private object HandleLightToggle(BasePlayer player)
+        {
+            ComputerStation station;
+            var turret = RCUtils.GetControlledEntity<AutoTurret>(player, out station);
+            if (turret == null || !RCUtils.HasController(turret, player))
+                return null;
+
+            var weapon = turret.GetAttachedWeapon();
+            if (weapon == null)
+                return null;
+
+            weapon.SetLightsOn(!weapon.LightsOn());
+            return False;
+        }
+
+        private void HandleSwapSeats(BasePlayer player)
+        {
+            ComputerStation station;
+            var controllable = RCUtils.GetControlledEntity<IRemoteControllable>(player, out station);
+            if (controllable == null)
+                return;
+
+            AutoTurret turret;
+            var drone = controllable as Drone;
+            if (drone != null)
+            {
+                turret = GetDroneTurret(drone);
+                if (turret != null && turret.IsOn() && !turret.PeacekeeperMode() && !(turret is NPCAutoTurret))
+                {
+                    SwitchControl(player, station, drone, turret);
+                }
+
+                return;
+            }
+
+            turret = controllable as AutoTurret;
+            if (turret != null)
+            {
+                drone = GetParentDrone(turret);
+                if (drone != null)
+                {
+                    SwitchControl(player, station, turret, drone);
+                }
+
+                return;
+            }
         }
 
         #endregion
@@ -1005,10 +1289,84 @@ namespace Oxide.Plugins
 
         #endregion
 
+        private class DroneController : ListComponent<DroneController>
+        {
+            public static void AddToDrone(Drone drone, AutoTurret turret, BasePlayer player)
+            {
+                var component = drone.gameObject.GetComponent<DroneController>();
+                if (component == null)
+                {
+                    component = drone.gameObject.AddComponent<DroneController>();
+                    component._drone = drone;
+                    component._turret = turret;
+                }
+                else
+                {
+                    component.enabled = true;
+                }
+
+                component._controller = player;
+                component._viewerId = new CameraViewerId(player.userID, 0);
+            }
+
+            public static void DestroyAll()
+            {
+                foreach (var component in InstanceList.ToArray())
+                {
+                    DestroyImmediate(component);
+                }
+            }
+
+            private Drone _drone;
+            private AutoTurret _turret;
+            private BasePlayer _controller;
+            private CameraViewerId _viewerId;
+
+            private void Update()
+            {
+                if (!RCUtils.HasController(_turret, _controller)
+                    || RCUtils.GetControlledEntity<AutoTurret>(_controller) != _turret)
+                {
+                    enabled = false;
+                    return;
+                }
+
+                // Optimization: Skip if there was no user input this frame.
+                if (_controller.lastTickTime < Time.time)
+                    return;
+
+                // Send only keyboard inputs to the drone.
+                var input = _controller.serverInput;
+                var originalMouseDelta = input.current.mouseDelta;
+                input.current.mouseDelta = Vector3.zero;
+                _drone.UserInput(input, _viewerId);
+                input.current.mouseDelta = originalMouseDelta;
+
+                if (_drone.currentInput.movement == Vector3.zero)
+                    return;
+
+                // Rotate the drone movement direction by the turret aim direction.
+                var worldDirection = _drone.transform.InverseTransformVector(_drone.currentInput.movement);
+                var turretRotation = Quaternion.Euler(0, Quaternion.LookRotation(_turret.aimDir).eulerAngles.y, 0);
+                _drone.currentInput.movement = turretRotation * worldDirection;
+            }
+
+            private void OnDestroy()
+            {
+                if (RCUtils.HasController(_drone, _controller))
+                {
+                    RCUtils.RemoveController(_drone);
+                }
+            }
+        }
+
         #region Configuration
 
         private class Configuration : BaseConfiguration
         {
+            [JsonProperty("RequirePermissionToControlDroneTurrets")]
+            public bool RequirePermission;
+
             [JsonProperty("TargetPlayers")]
             public bool TargetPlayers = true;
 
