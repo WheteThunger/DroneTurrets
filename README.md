@@ -48,7 +48,7 @@ Default configuration:
 }
 ```
 
-- `RequirePermissionToControlDroneTurrets` (`true` or `false`) -- Determines whether players require the `droneturrets.control` permission to remotely control turrets attached to drones. While `true`, anybody can control drone turrets. While a player is prohibited from controlling drone turrets, they can still view the turrets perspective. Note: NPC auto turrets and peacekeeper turrets cannot be viewed under any circumstances.
+- `RequirePermissionToControlDroneTurrets` (`true` or `false`) -- Determines whether players require the `droneturrets.control` permission to remotely control turrets attached to drones. While `false`, anybody can control drone turrets. While a player is prohibited from controlling drone turrets, they can still view the turrets perspective. Note: NPC auto turrets and peacekeeper turrets cannot be viewed under any circumstances.
 - `TargetPlayers` (`true` or `false`) -- Determines whether drone-mounted turrets should target real players.
 - `TargetNPCs` (`true` or `false`) -- Determines whether drone-mounted turrets should target NPCs.
 - `TargetAnimals` (`true` or `false`) -- Determines whether drone-mounted turrets should target NPC animals such as bears.
