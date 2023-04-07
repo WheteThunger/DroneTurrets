@@ -5,7 +5,6 @@
 ## Features
 
 - Allows players with permission to deploy auto turrets onto RC drones
-- Allows quickly switching between the drone and turret perspectives by pressing the "swap seats" key (default: X)
 - Allows moving the drone while controlling the turret
 - (Balance) Configurable turret range
 - (Balance) Optionally disable targeting of players, NPCs and animals
