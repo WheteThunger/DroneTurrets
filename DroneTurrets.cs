@@ -12,7 +12,7 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Drone Turrets", "WhiteThunder", "1.3.0")]
+    [Info("Drone Turrets", "WhiteThunder", "1.3.1")]
     [Description("Allows players to deploy auto turrets to RC drones.")]
     internal class DroneTurrets : CovalencePlugin
     {
@@ -57,7 +57,7 @@ namespace Oxide.Plugins
         private readonly object True = true;
         private readonly object False = false;
 
-        private DynamicHookSubscriber<uint> _turretDroneTracker;
+        private DynamicHookSubscriber<NetworkableId> _turretDroneTracker;
 
         #endregion
 
@@ -86,7 +86,7 @@ namespace Oxide.Plugins
                 nameof(canRemove),
             };
 
-            _turretDroneTracker = new DynamicHookSubscriber<uint>(this, dynamicHookNames.ToArray());
+            _turretDroneTracker = new DynamicHookSubscriber<NetworkableId>(this, dynamicHookNames.ToArray());
             _turretDroneTracker.UnsubscribeAll();
         }
 
