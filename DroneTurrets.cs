@@ -12,7 +12,7 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Drone Turrets", "WhiteThunder", "1.3.1")]
+    [Info("Drone Turrets", "WhiteThunder", "1.3.2")]
     [Description("Allows players to deploy auto turrets to RC drones.")]
     internal class DroneTurrets : CovalencePlugin
     {
@@ -932,7 +932,7 @@ namespace Oxide.Plugins
 
         private static Item FindPlayerAutoTurretItem(BasePlayer basePlayer)
         {
-            return basePlayer.inventory.FindItemID(AutoTurretItemId);
+            return basePlayer.inventory.FindItemByItemID(AutoTurretItemId);
         }
 
         private void RefreshDroneSettingsProfile(Drone drone)
