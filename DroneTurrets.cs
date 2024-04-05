@@ -11,7 +11,7 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Drone Turrets", "WhiteThunder", "1.3.2")]
+    [Info("Drone Turrets", "WhiteThunder", "1.3.3")]
     [Description("Allows players to deploy auto turrets to RC drones.")]
     internal class DroneTurrets : CovalencePlugin
     {
@@ -45,8 +45,8 @@ namespace Oxide.Plugins
         private const BaseEntity.Slot TurretSlot = BaseEntity.Slot.UpperModifier;
 
         private static readonly Vector3 SphereEntityLocalPosition = new(0, -0.14f, 0);
-        private static readonly Vector3 TurretSwitchLocalPosition = new(0, -0.64f, -0.32f);
-        private static readonly Quaternion TurretSwitchLocalRotation = Quaternion.Euler(0, 180, 0);
+        private static readonly Vector3 TurretSwitchPosition = new Vector3(0, 0.36f, -0.32f);
+        private static readonly Quaternion TurretSwitchRotation = Quaternion.Euler(0, 180, 0);
 
         private static readonly Vector3 SphereTransformScale = new(TurretScale, TurretScale, TurretScale);
         private static readonly Vector3 TurretTransformScale = new(1 / TurretScale, 1 / TurretScale, 1 / TurretScale);
@@ -842,8 +842,8 @@ namespace Oxide.Plugins
 
         private static ElectricSwitch AttachTurretSwitch(AutoTurret autoTurret)
         {
-            var position = autoTurret.transform.TransformPoint(TurretSwitchLocalPosition);
-            var rotation = autoTurret.transform.rotation * TurretSwitchLocalRotation;
+            var position = autoTurret.transform.TransformPoint(TurretSwitchPosition);
+            var rotation = autoTurret.transform.rotation * TurretSwitchRotation;
             var electricSwitch = GameManager.server.CreateEntity(ElectricSwitchPrefab, position, rotation) as ElectricSwitch;
             if (electricSwitch == null)
                 return null;
@@ -878,6 +878,17 @@ namespace Oxide.Plugins
             electricSwitch.SetFlag(IOEntity.Flag_HasPower, true);
             RemoveProblemComponents(electricSwitch);
             HideInputsAndOutputs(electricSwitch);
+
+            if (electricSwitch.HasParent())
+            {
+                var transform = electricSwitch.transform;
+                if (transform.localPosition != TurretSwitchPosition)
+                {
+                    transform.localPosition = TurretSwitchPosition;
+                    electricSwitch.InvalidateNetworkCache();
+                    electricSwitch.SendNetworkUpdate_Position();
+                }
+            }
         }
 
         private static void SetupSphereEntity(SphereEntity sphereEntity)
