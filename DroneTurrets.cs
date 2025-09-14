@@ -11,7 +11,7 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Drone Turrets", "WhiteThunder", "1.3.3")]
+    [Info("Drone Turrets", "WhiteThunder", "1.3.4")]
     [Description("Allows players to deploy auto turrets to RC drones.")]
     internal class DroneTurrets : CovalencePlugin
     {
@@ -217,6 +217,9 @@ namespace Oxide.Plugins
         {
             if (turret == null || target == null || GetParentDrone(turret) == null)
                 return null;
+
+            if (target is Chicken or FarmableAnimal)
+                return False;
 
             if (!_config.TargetAnimals && target is BaseAnimalNPC)
                 return False;
