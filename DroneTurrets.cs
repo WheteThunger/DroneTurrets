@@ -1165,11 +1165,8 @@ namespace Oxide.Plugins
 
             if (!turret.IsAuthed(basePlayer))
             {
-                turret.authorizedPlayers.Add(new ProtoBuf.PlayerNameID
-                {
-                    userid = basePlayer.userID,
-                    username = basePlayer.displayName
-                });
+                turret.authorizedPlayers.Add(basePlayer.userID);
+                turret.UpdateMaxAuthCapacity();
                 turret.SendNetworkUpdate();
             }
 
