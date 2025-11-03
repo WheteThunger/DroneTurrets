@@ -74,10 +74,6 @@ Default configuration:
 
 ## FAQ
 
-#### Is it possible to remove the black sphere?
-
-Yes, by installing [Entity Scale Manager](https://umod.org/plugins/entity-scale-manager) and configuring it to hide spheres after resize. However, there is a significant performance cost to enabling that feature, so enable it cautiously, and disable it if it doesn't work out.
-
 #### Why do the NPC auto turrets not have switches?
 
 Switches don't spawn on NPC auto turrets because the player wouldn't be able to interact with them anyway, due to the collider being too large client-side. This cannot be addressed by a plugin without moving the switch out to an awkward position further away from the turret.

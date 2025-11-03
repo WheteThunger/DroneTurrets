@@ -11,14 +11,14 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Drone Turrets", "WhiteThunder", "1.3.4")]
+    [Info("Drone Turrets", "WhiteThunder", "1.4.0")]
     [Description("Allows players to deploy auto turrets to RC drones.")]
     internal class DroneTurrets : CovalencePlugin
     {
         #region Fields
 
         [PluginReference]
-        private readonly Plugin DroneSettings, EntityScaleManager;
+        private readonly Plugin DroneSettings;
 
         private Configuration _config;
 
@@ -30,7 +30,6 @@ namespace Oxide.Plugins
         private const string PermissionAutoDeploy = "droneturrets.autodeploy";
         private const string PermissionControl = "droneturrets.control";
 
-        private const string SpherePrefab = "assets/prefabs/visualization/sphere.prefab";
         private const string AutoTurretPrefab = "assets/prefabs/npc/autoturret/autoturret_deployed.prefab";
         private const string NpcAutoTurretPrefab = "assets/content/props/sentry_scientists/sentry.bandit.static.prefab";
         private const string ElectricSwitchPrefab = "assets/prefabs/deployable/playerioents/simpleswitch/switch.prefab";
@@ -44,12 +43,12 @@ namespace Oxide.Plugins
 
         private const BaseEntity.Slot TurretSlot = BaseEntity.Slot.UpperModifier;
 
-        private static readonly Vector3 SphereEntityLocalPosition = new(0, -0.14f, 0);
-        private static readonly Vector3 TurretSwitchPosition = new Vector3(0, 0.36f, -0.32f);
+        private static readonly Vector3 TurretLocalPosition = new(0, -0.14f, 0);
+        private static readonly Vector3 TurretSwitchPosition = new(0, 0.36f, -0.32f);
         private static readonly Quaternion TurretSwitchRotation = Quaternion.Euler(0, 180, 0);
 
-        private static readonly Vector3 SphereTransformScale = new(TurretScale, TurretScale, TurretScale);
-        private static readonly Vector3 TurretTransformScale = new(1 / TurretScale, 1 / TurretScale, 1 / TurretScale);
+        private static readonly Vector3 TurretTransformScale = Vector3.one * TurretScale;
+        private static readonly Vector3 TurretTransformInvertedScale = Vector3.one / TurretScale;
 
         private readonly object True = true;
         private readonly object False = false;
@@ -115,6 +114,19 @@ namespace Oxide.Plugins
         private void Unload()
         {
             DroneController.DestroyAll();
+
+            foreach (var entity in BaseNetworkable.serverEntities)
+            {
+                var drone = entity as Drone;
+                if (drone == null || !RCUtils.IsRCDrone(drone))
+                    continue;
+
+                var turret = GetDroneTurret(drone);
+                if (turret == null)
+                    continue;
+
+                turret.inventory.onItemAddedRemoved -= HandleTurretInventoryItemAddedRemoved;
+            }
         }
 
         private object OnServerCommand(ConsoleSystem.Arg arg)
@@ -283,20 +295,9 @@ namespace Oxide.Plugins
 
         private void OnEntityKill(AutoTurret turret)
         {
-            SphereEntity parentSphere;
-            var drone = GetParentDrone(turret, out parentSphere);
+            var drone = GetParentDrone(turret);
             if (drone == null)
                 return;
-
-            var parentSphere2 = parentSphere;
-            parentSphere.Invoke(() =>
-            {
-                // EntityScaleManager may have already destroyed the sphere in the same frame.
-                if (!parentSphere2.IsDestroyed)
-                {
-                    parentSphere2.Kill();
-                }
-            }, 0);
 
             _turretDroneTracker.Remove(drone.net.ID);
 
@@ -426,7 +427,8 @@ namespace Oxide.Plugins
 
         #region API
 
-        private AutoTurret API_DeployAutoTurret(Drone drone, BasePlayer player)
+        [HookMethod(nameof(API_DeployAutoTurret))]
+        public AutoTurret API_DeployAutoTurret(Drone drone, BasePlayer player)
         {
             if (GetDroneTurret(drone) != null
                 || drone.GetSlot(TurretSlot) != null
@@ -436,7 +438,8 @@ namespace Oxide.Plugins
             return DeployAutoTurret(drone, player);
         }
 
-        private NPCAutoTurret API_DeployNpcAutoTurret(Drone drone, BasePlayer player)
+        [HookMethod(nameof(API_DeployNpcAutoTurret))]
+        public NPCAutoTurret API_DeployNpcAutoTurret(Drone drone, BasePlayer player)
         {
             if (GetDroneTurret(drone) != null
                 || drone.GetSlot(TurretSlot) != null
@@ -688,8 +691,7 @@ namespace Oxide.Plugins
 
             public static T GetControlledEntity<T>(BasePlayer player) where T : class
             {
-                ComputerStation station;
-                return GetControlledEntity<T>(player, out station);
+                return GetControlledEntity<T>(player, out _);
             }
         }
 
@@ -705,17 +707,9 @@ namespace Oxide.Plugins
             return hookResult is false;
         }
 
-        private static Drone GetParentDrone(BaseEntity entity, out SphereEntity parentSphere)
-        {
-            parentSphere = entity.GetParentEntity() as SphereEntity;
-            return parentSphere != null
-                ? parentSphere.GetParentEntity() as Drone
-                : null;
-        }
-
         private static Drone GetParentDrone(BaseEntity entity)
         {
-            return GetParentDrone(entity, out _);
+            return entity.GetParentEntity() as Drone;
         }
 
         private static AutoTurret GetDroneTurret(Drone drone)
@@ -773,21 +767,6 @@ namespace Oxide.Plugins
             entity.ClientRPCPlayer(null, player, "HitNotify");
         }
 
-        private static SphereEntity SpawnSphereEntity(Drone drone)
-        {
-            var sphereEntity = GameManager.server.CreateEntity(SpherePrefab, SphereEntityLocalPosition) as SphereEntity;
-            if (sphereEntity == null)
-                return null;
-
-            SetupSphereEntity(sphereEntity);
-            sphereEntity.currentRadius = TurretScale;
-            sphereEntity.lerpRadius = TurretScale;
-            sphereEntity.SetParent(drone);
-            sphereEntity.Spawn();
-
-            return sphereEntity;
-        }
-
         private static void RemoveProblemComponents(BaseEntity entity)
         {
             foreach (var collider in entity.GetComponentsInChildren<Collider>())
@@ -816,6 +795,7 @@ namespace Oxide.Plugins
             if (turretAlarm == null)
                 return null;
 
+            turretAlarm.networkEntityScale = true;
             turretAlarm.pickup.enabled = false;
             turretAlarm.SetFlag(IOEntity.Flag_HasPower, ShouldPowerAlarm(drone, turret));
             RemoveProblemComponents(turretAlarm);
@@ -833,6 +813,7 @@ namespace Oxide.Plugins
             if (turretLight == null)
                 return null;
 
+            turretLight.networkEntityScale = true;
             turretLight.SetFlag(IOEntity.Flag_HasPower, ShouldPowerAlarm(drone, turret));
             RemoveProblemComponents(turretLight);
             HideInputsAndOutputs(turretLight);
@@ -845,15 +826,14 @@ namespace Oxide.Plugins
 
         private static ElectricSwitch AttachTurretSwitch(AutoTurret autoTurret)
         {
-            var position = autoTurret.transform.TransformPoint(TurretSwitchPosition);
-            var rotation = autoTurret.transform.rotation * TurretSwitchRotation;
-            var electricSwitch = GameManager.server.CreateEntity(ElectricSwitchPrefab, position, rotation) as ElectricSwitch;
+            var electricSwitch = GameManager.server.CreateEntity(ElectricSwitchPrefab, TurretSwitchPosition, TurretSwitchRotation) as ElectricSwitch;
             if (electricSwitch == null)
                 return null;
 
+            electricSwitch.networkEntityScale = true;
             SetupTurretSwitch(electricSwitch);
+            electricSwitch.SetParent(autoTurret);
             electricSwitch.Spawn();
-            electricSwitch.SetParent(autoTurret, true);
 
             return electricSwitch;
         }
@@ -872,6 +852,19 @@ namespace Oxide.Plugins
             }
         }
 
+        private static void RefreshScaledChildEntity(BaseEntity entity)
+        {
+            if (entity.networkEntityScale)
+                return;
+
+            // There is a bug where when the client first spawns the entity, the parent entity's modified scale
+            // isn't taken into account, unless the child entity's localScale is also networked.
+            // Additionally, if the entity is already rendered at the incorrect scale, sending a network update that
+            // includes localScale will correct it.
+            entity.networkEntityScale = true;
+            entity.SendNetworkUpdate();
+        }
+
         private static void SetupTurretSwitch(ElectricSwitch electricSwitch)
         {
             // Damage will be processed by the drone.
@@ -882,7 +875,7 @@ namespace Oxide.Plugins
             RemoveProblemComponents(electricSwitch);
             HideInputsAndOutputs(electricSwitch);
 
-            if (electricSwitch.HasParent())
+            if (electricSwitch.IsFullySpawned())
             {
                 var transform = electricSwitch.transform;
                 if (transform.localPosition != TurretSwitchPosition)
@@ -891,18 +884,9 @@ namespace Oxide.Plugins
                     electricSwitch.InvalidateNetworkCache();
                     electricSwitch.SendNetworkUpdate_Position();
                 }
+
+                RefreshScaledChildEntity(electricSwitch);
             }
-        }
-
-        private static void SetupSphereEntity(SphereEntity sphereEntity)
-        {
-            sphereEntity.EnableSaving(true);
-
-            // Fix the issue where leaving the area and returning would not recreate the sphere and its children on clients.
-            sphereEntity.EnableGlobalBroadcast(false);
-
-            // Needs to be called since we aren't using server side lerping.
-            sphereEntity.transform.localScale = SphereTransformScale;
         }
 
         private static BaseEntity GetLookEntity(BasePlayer basePlayer, float maxDistance = 3)
@@ -936,6 +920,19 @@ namespace Oxide.Plugins
         private static Item FindPlayerAutoTurretItem(BasePlayer basePlayer)
         {
             return basePlayer.inventory.FindItemByItemID(AutoTurretItemId);
+        }
+
+        private static void HandleTurretInventoryItemAddedRemoved(Item item, bool wasAdded)
+        {
+            if (item.position != 0)
+                return;
+
+            var heldWeapon = item.GetHeldEntity() as BaseProjectile;
+            if (heldWeapon == null)
+                return;
+
+            // Ensure the turret's weapon scale is correct.
+            heldWeapon.networkEntityScale = wasAdded;
         }
 
         private void RefreshDroneSettingsProfile(Drone drone)
@@ -999,11 +996,6 @@ namespace Oxide.Plugins
             return permission.UserHasPermission(player.UserIDString, PermissionControl);
         }
 
-        private void RegisterWithEntityScaleManager(BaseEntity entity)
-        {
-            EntityScaleManager?.Call("API_RegisterScaledEntity", entity);
-        }
-
         private void RefreshAlarmState(Drone drone, AutoTurret turret)
         {
             if (_config.EnableAudioAlarm)
@@ -1025,8 +1017,38 @@ namespace Oxide.Plugins
             }
         }
 
-        private void SetupDroneTurret(Drone drone, AutoTurret turret)
+        private void SetupDroneTurretBeforeSpawn(AutoTurret turret)
         {
+            turret.transform.localScale = TurretTransformScale;
+            turret.networkEntityScale = true;
+        }
+
+        private void SetupDroneTurretAfterSpawn(Drone drone, AutoTurret turret)
+        {
+            var transform = turret.transform;
+            if (!turret.networkEntityScale || transform.localScale != TurretTransformScale)
+            {
+                transform.localScale = TurretTransformScale;
+                turret.networkEntityScale = true;
+                turret.SendNetworkUpdate();
+            }
+
+            turret.inventory.onItemAddedRemoved += HandleTurretInventoryItemAddedRemoved;
+
+            // Invert the localScale of the target trigger to compensate for the turret localScale being increased.
+            // Without doing this, the range of the turret corresponds to the turret scale.
+            var targetTrigger = turret.GetComponentInChildren<TargetTrigger>();
+            if (targetTrigger)
+            {
+                targetTrigger.transform.localScale = TurretTransformInvertedScale;
+            }
+
+            var warningZone = turret.GetComponentInChildren<TriggerHostileWarningZone>();
+            if (warningZone != null)
+            {
+                warningZone.transform.localScale = TurretTransformInvertedScale;
+            }
+
             // Damage will be processed by the drone.
             turret.baseProtection = null;
 
@@ -1043,6 +1065,7 @@ namespace Oxide.Plugins
                 if (turretAlarm != null)
                 {
                     turretAlarm.SetFlag(IOEntity.Flag_HasPower, ShouldPowerAlarm(drone, turret));
+                    RefreshScaledChildEntity(turretAlarm);
                 }
                 else
                 {
@@ -1056,6 +1079,7 @@ namespace Oxide.Plugins
                 if (turretLight != null)
                 {
                     turretLight.SetFlag(IOEntity.Flag_HasPower, ShouldPowerAlarm(drone, turret));
+                    RefreshScaledChildEntity(turretLight);
                 }
                 else
                 {
@@ -1065,26 +1089,19 @@ namespace Oxide.Plugins
 
             if (_config.EnableAudioAlarm || _config.EnableSirenLight)
             {
-                var droneForClosure = drone;
-                var turretForClosure = turret;
+                var drone2 = drone;
+                var turret2 = turret;
 
                 // Delay refreshing the alarm state in case the turret is being automatically powered on.
                 NextTick(() =>
                 {
-                    if (droneForClosure == null || turretForClosure == null)
+                    if (drone2 == null || turret2 == null)
                         return;
 
-                    RefreshAlarmState(droneForClosure, turretForClosure);
+                    RefreshAlarmState(drone2, turret2);
                 });
             }
 
-            // Invert the localScale of the turret to compensate for the sphereEntity localScale being increased.
-            // Without doing this, the range of the turret corresponds to the sphere scale.
-            // This works fine for now because the only colliders remaining are triggers.
-            // This will require a different approach if the non-trigger colliders are reintroduced.
-            turret.transform.localScale = TurretTransformScale;
-
-            RegisterWithEntityScaleManager(turret);
             RefreshDroneSettingsProfile(drone);
             _turretDroneTracker.Add(drone.net.ID);
         }
@@ -1092,12 +1109,15 @@ namespace Oxide.Plugins
         private void RefreshDroneTurret(Drone drone, AutoTurret turret)
         {
             var sphereEntity = turret.GetParentEntity() as SphereEntity;
-            if (sphereEntity == null)
-                return;
+            if (sphereEntity != null)
+            {
+                turret.SetParent(drone, worldPositionStays: true);
+                sphereEntity.Kill();
+            }
 
-            SetupSphereEntity(sphereEntity);
-            SetupDroneTurret(drone, turret);
+            SetupDroneTurretAfterSpawn(drone, turret);
 
+            // The switch is only expected to be present for normal auto turrets, not for NPC auto turrets.
             var electricSwitch = turret.GetComponentInChildren<ElectricSwitch>();
             if (electricSwitch != null)
             {
@@ -1107,22 +1127,16 @@ namespace Oxide.Plugins
 
         private NPCAutoTurret DeployNpcAutoTurret(Drone drone, BasePlayer deployer)
         {
-            var sphereEntity = SpawnSphereEntity(drone);
-            if (sphereEntity == null)
-                return null;
-
-            var turret = GameManager.server.CreateEntity(NpcAutoTurretPrefab) as NPCAutoTurret;
+            var turret = GameManager.server.CreateEntity(NpcAutoTurretPrefab, TurretLocalPosition) as NPCAutoTurret;
             if (turret == null)
-            {
-                sphereEntity.Kill();
                 return null;
-            }
 
-            turret.SetParent(sphereEntity);
+            SetupDroneTurretBeforeSpawn(turret);
+            turret.SetParent(drone);
             turret.Spawn();
+            SetupDroneTurretAfterSpawn(drone, turret);
 
             drone.SetSlot(TurretSlot, turret);
-            SetupDroneTurret(drone, turret);
 
             Effect.server.Run(DeployEffectPrefab, turret.transform.position);
             ExposedHooks.OnDroneNpcTurretDeployed(drone, turret, deployer);
@@ -1132,30 +1146,24 @@ namespace Oxide.Plugins
 
         private AutoTurret DeployAutoTurret(Drone drone, BasePlayer basePlayer, float conditionFraction = 1)
         {
-            var sphereEntity = SpawnSphereEntity(drone);
-            if (sphereEntity == null)
-                return null;
-
-            var turret = GameManager.server.CreateEntity(AutoTurretPrefab) as AutoTurret;
+            var turret = GameManager.server.CreateEntity(AutoTurretPrefab, TurretLocalPosition) as AutoTurret;
             if (turret == null)
-            {
-                sphereEntity.Kill();
                 return null;
-            }
 
             if (basePlayer != null)
             {
                 turret.OwnerID = basePlayer.userID;
             }
 
+            SetupDroneTurretBeforeSpawn(turret);
             turret.SetFlag(IOEntity.Flag_HasPower, true);
-            turret.SetParent(sphereEntity);
+            turret.SetParent(drone);
             turret.Spawn();
             turret.SetHealth(turret.MaxHealth() * conditionFraction);
             AttachTurretSwitch(turret);
 
             drone.SetSlot(TurretSlot, turret);
-            SetupDroneTurret(drone, turret);
+            SetupDroneTurretAfterSpawn(drone, turret);
 
             Effect.server.Run(DeployEffectPrefab, turret.transform.position);
             ExposedHooks.OnDroneTurretDeployed(drone, turret, basePlayer);
