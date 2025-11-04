@@ -922,7 +922,7 @@ namespace Oxide.Plugins
             return basePlayer.inventory.FindItemByItemID(AutoTurretItemId);
         }
 
-        private static void HandleTurretInventoryItemAddedRemoved(Item item, bool wasAdded)
+        private static void ToggleScaleNetworking(Item item, bool enabled, bool sendUpdate = false)
         {
             if (item.position != 0)
                 return;
@@ -932,7 +932,17 @@ namespace Oxide.Plugins
                 return;
 
             // Ensure the turret's weapon scale is correct.
-            heldWeapon.networkEntityScale = wasAdded;
+            heldWeapon.networkEntityScale = enabled;
+
+            if (sendUpdate)
+            {
+                heldWeapon.SendNetworkUpdate();
+            }
+        }
+
+        private static void HandleTurretInventoryItemAddedRemoved(Item item, bool wasAdded)
+        {
+            ToggleScaleNetworking(item, wasAdded);
         }
 
         private void RefreshDroneSettingsProfile(Drone drone)
@@ -1034,6 +1044,12 @@ namespace Oxide.Plugins
             }
 
             turret.inventory.onItemAddedRemoved += HandleTurretInventoryItemAddedRemoved;
+
+            var turretWeaponItem = turret.inventory.GetSlot(0);
+            if (turretWeaponItem != null)
+            {
+                ToggleScaleNetworking(turretWeaponItem, enabled: true, sendUpdate: true);
+            }
 
             // Invert the localScale of the target trigger to compensate for the turret localScale being increased.
             // Without doing this, the range of the turret corresponds to the turret scale.
