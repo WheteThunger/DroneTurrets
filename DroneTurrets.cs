@@ -11,7 +11,7 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Drone Turrets", "WhiteThunder", "1.4.0")]
+    [Info("Drone Turrets", "WhiteThunder", "1.4.1")]
     [Description("Allows players to deploy auto turrets to RC drones.")]
     internal class DroneTurrets : CovalencePlugin
     {
@@ -263,8 +263,6 @@ namespace Oxide.Plugins
                 return null;
 
             drone.Hurt(info);
-            HitNotify(drone, info);
-
             return True;
         }
 
@@ -280,8 +278,6 @@ namespace Oxide.Plugins
                 return null;
 
             drone.Hurt(info);
-            HitNotify(drone, info);
-
             return True;
         }
 
@@ -756,15 +752,6 @@ namespace Oxide.Plugins
             // Prevent drone pickup while it has a turret (the turret must be removed first).
             // Ignores NPC turrets since they can't be picked up.
             return turret == null || turret is NPCAutoTurret;
-        }
-
-        private static void HitNotify(BaseEntity entity, HitInfo info)
-        {
-            var player = info.Initiator as BasePlayer;
-            if (player == null)
-                return;
-
-            entity.ClientRPCPlayer(null, player, "HitNotify");
         }
 
         private static void RemoveProblemComponents(BaseEntity entity)
