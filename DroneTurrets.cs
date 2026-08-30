@@ -11,7 +11,7 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Drone Turrets", "WhiteThunder", "1.4.1")]
+    [Info("Drone Turrets", "WhiteThunder", "1.4.2")]
     [Description("Allows players to deploy auto turrets to RC drones.")]
     internal class DroneTurrets : CovalencePlugin
     {
@@ -351,7 +351,8 @@ namespace Oxide.Plugins
                 RCUtils.AddFakeViewer(turret);
                 RCUtils.AddViewer(turret, player);
                 RCUtils.RemoveController(turret);
-                station.SetFlag(ComputerStation.Flag_HasFullControl, false);
+                using var flagsScope = station.StartSetFlags(BaseEntity.FlagsUpdateMode.SendNetworkUpdate_Flags);
+                flagsScope.Set(ComputerStation.Flag_HasFullControl, false);
                 return;
             }
 
@@ -784,7 +785,7 @@ namespace Oxide.Plugins
 
             turretAlarm.networkEntityScale = true;
             turretAlarm.pickup.enabled = false;
-            turretAlarm.SetFlag(IOEntity.Flag_HasPower, ShouldPowerAlarm(drone, turret));
+            turretAlarm.SetFlagLocal(IOEntity.Flag_HasPower, ShouldPowerAlarm(drone, turret));
             RemoveProblemComponents(turretAlarm);
             HideInputsAndOutputs(turretAlarm);
 
@@ -801,7 +802,7 @@ namespace Oxide.Plugins
                 return null;
 
             turretLight.networkEntityScale = true;
-            turretLight.SetFlag(IOEntity.Flag_HasPower, ShouldPowerAlarm(drone, turret));
+            turretLight.SetFlagLocal(IOEntity.Flag_HasPower, ShouldPowerAlarm(drone, turret));
             RemoveProblemComponents(turretLight);
             HideInputsAndOutputs(turretLight);
 
@@ -857,8 +858,9 @@ namespace Oxide.Plugins
             // Damage will be processed by the drone.
             electricSwitch.baseProtection = null;
 
+            using var flagsScope = electricSwitch.StartSetFlags(BaseEntity.FlagsUpdateMode.SendNetworkUpdate_Flags);
+            flagsScope.Set(IOEntity.Flag_HasPower, true);
             electricSwitch.pickup.enabled = false;
-            electricSwitch.SetFlag(IOEntity.Flag_HasPower, true);
             RemoveProblemComponents(electricSwitch);
             HideInputsAndOutputs(electricSwitch);
 
@@ -977,7 +979,7 @@ namespace Oxide.Plugins
                 station.currentlyControllingEnt.uid = nextEnt.net.ID;
                 station.currentPlayerID = player.userID;
                 var isControlling = RCUtils.AddViewer(next, player);
-                station.SetFlag(ComputerStation.Flag_HasFullControl, isControlling, networkupdate: false);
+                station.SetFlagLocal(ComputerStation.Flag_HasFullControl, isControlling);
                 station.SendNetworkUpdateImmediate();
                 // station.SendControlBookmarks(player);
                 station.InvokeRepeating(station.ControlCheck, 0f, 0f);
@@ -1000,7 +1002,8 @@ namespace Oxide.Plugins
                 var turretAlarm = GetTurretAlarm(turret);
                 if (turretAlarm != null)
                 {
-                    turretAlarm.SetFlag(IOEntity.Flag_HasPower, ShouldPowerAlarm(drone, turret));
+                    using var flagsScope = turretAlarm.StartSetFlags(BaseEntity.FlagsUpdateMode.SendNetworkUpdate_Flags);
+                    flagsScope.Set(IOEntity.Flag_HasPower, ShouldPowerAlarm(drone, turret));
                 }
             }
 
@@ -1009,7 +1012,8 @@ namespace Oxide.Plugins
                 var turretLight = GetTurretLight(turret);
                 if (turretLight != null)
                 {
-                    turretLight.SetFlag(IOEntity.Flag_HasPower, ShouldPowerAlarm(drone, turret));
+                    using var flagsScope = turretLight.StartSetFlags(BaseEntity.FlagsUpdateMode.SendNetworkUpdate_Flags);
+                    flagsScope.Set(IOEntity.Flag_HasPower, ShouldPowerAlarm(drone, turret));
                 }
             }
         }
@@ -1067,7 +1071,8 @@ namespace Oxide.Plugins
                 var turretAlarm = GetTurretAlarm(turret);
                 if (turretAlarm != null)
                 {
-                    turretAlarm.SetFlag(IOEntity.Flag_HasPower, ShouldPowerAlarm(drone, turret));
+                    using var flagsScope = turretAlarm.StartSetFlags(BaseEntity.FlagsUpdateMode.SendNetworkUpdate_Flags);
+                    flagsScope.Set(IOEntity.Flag_HasPower, ShouldPowerAlarm(drone, turret));
                     RefreshScaledChildEntity(turretAlarm);
                 }
                 else
@@ -1081,7 +1086,8 @@ namespace Oxide.Plugins
                 var turretLight = GetTurretLight(turret);
                 if (turretLight != null)
                 {
-                    turretLight.SetFlag(IOEntity.Flag_HasPower, ShouldPowerAlarm(drone, turret));
+                    using var flagsScope = turretLight.StartSetFlags(BaseEntity.FlagsUpdateMode.SendNetworkUpdate_Flags);
+                    flagsScope.Set(IOEntity.Flag_HasPower, ShouldPowerAlarm(drone, turret));
                     RefreshScaledChildEntity(turretLight);
                 }
                 else
@@ -1159,7 +1165,7 @@ namespace Oxide.Plugins
             }
 
             SetupDroneTurretBeforeSpawn(turret);
-            turret.SetFlag(IOEntity.Flag_HasPower, true);
+            turret.SetFlagLocal(IOEntity.Flag_HasPower, true);
             turret.SetParent(drone);
             turret.Spawn();
             turret.SetHealth(turret.MaxHealth() * conditionFraction);
