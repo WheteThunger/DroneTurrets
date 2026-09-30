@@ -11,7 +11,7 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Drone Turrets", "WhiteThunder", "1.4.2")]
+    [Info("Drone Turrets", "WhiteThunder", "1.4.3")]
     [Description("Allows players to deploy auto turrets to RC drones.")]
     internal class DroneTurrets : CovalencePlugin
     {
@@ -230,7 +230,7 @@ namespace Oxide.Plugins
             if (turret == null || target == null || GetParentDrone(turret) == null)
                 return null;
 
-            if (target is Chicken or FarmableAnimal)
+            if (target is Rust.Ai.Gen2.Chicken or FarmableAnimal)
                 return False;
 
             if (!_config.TargetAnimals && target is BaseAnimalNPC)
@@ -929,7 +929,7 @@ namespace Oxide.Plugins
             }
         }
 
-        private static void HandleTurretInventoryItemAddedRemoved(Item item, bool wasAdded)
+        private static void HandleTurretInventoryItemAddedRemoved(Item item, bool wasAdded, BasePlayer sourcePlayer)
         {
             ToggleScaleNetworking(item, wasAdded);
         }
